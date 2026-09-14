@@ -21,7 +21,7 @@ model User {
   cin String @unique
   telephone String @unique
   service String
-  role Role @default(USER)
+  role Role @default(DEPOSITEUR_COMPTABLE)
   adresse String
   email String? @unique
   password String

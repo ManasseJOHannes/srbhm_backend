@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
-import { IsInt, IsOptional,Max, Min, IsString } from "class-validator";
-
+import { IsInt, IsOptional,Max, Min, IsString, IsEnum } from "class-validator";
+import { Role } from "@prisma/client";
 export class PaginationUserDto {
   @IsOptional()
   @IsInt()
@@ -20,6 +20,6 @@ export class PaginationUserDto {
   search?: string;
 
   @IsOptional()
-  @IsString()
-  role?: string;
+  @IsEnum(Role)
+  role?: Role;
 }

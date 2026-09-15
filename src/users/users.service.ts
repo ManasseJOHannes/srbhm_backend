@@ -1,39 +1,32 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import { CreateAdminUserDto } from './dto/create-admin-user.dto.js';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createUserDto: CreateUserDto) {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: createUserDto.email },
-    });
+  async create(createUserDto: CreateAdminUserDto) {
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { imatricule: createUserDto.imatricule},
+          { cin: createUserDto.cin},
+          {telephone: createUserDto.telephone},
+          ...(createUserDto.email
+            ? [{ email: createUserDto.email}]
+            : []
+          ),
+        ],
+      }
+    })
     if (existingUser) {
       throw new ConflictException('User already exists');
     }
-    const existingImatricule = await this.prisma.user.findUnique({
-      where: { imatricule: createUserDto.imatricule },
-    });
-    if (existingImatricule) {
-      throw new ConflictException(`User with this imatricule ${createUserDto.imatricule} already exists`);
-    }
-    const existingCin = await this.prisma.user.findUnique({
-      where: { cin: createUserDto.cin },
-    });
-    if (existingCin) {
-      throw new ConflictException(`User with this cin ${createUserDto.cin} already exists`);
-    }
-    const existingTelephone = await this.prisma.user.findUnique({
-      where: { telephone: createUserDto.telephone },
-    });
-    if (existingTelephone) {
-      throw new ConflictException(`User with this telephone ${createUserDto.telephone} already exists`);
-    }
+
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
     return this.prisma.user.create({
       data: {
@@ -59,6 +52,8 @@ export class UsersService {
         role: true,
         adresse: true,
         email: true,
+        createdAt: true,
+        updatedAt: true
       },
     });
   }

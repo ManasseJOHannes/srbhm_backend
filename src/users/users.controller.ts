@@ -9,6 +9,7 @@ import { UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { CreateAdminUserDto } from './dto/create-admin-user.dto.js';
 
 @UseGuards(AuthGuard('jwt'),RolesGuard)
 @Controller('users')
@@ -17,8 +18,8 @@ export class UsersController {
 
   @Roles(Role.ADMIN)
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(@Body() CreateUserDto: CreateAdminUserDto) {
+    return this.usersService.create(CreateUserDto);
   }
 
   // @UseGuards(AuthGuard('jwt'))

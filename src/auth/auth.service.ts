@@ -11,12 +11,12 @@ export class AuthService {
         private readonly jwtService: JwtService
     ) {}
 
-    async validateUser(LoginDto: LoginDto) {
+    async validateUser(loginDto: LoginDto) {
         const user = await this.prisma.user.findFirst({
             where: { 
               OR: [
-                { email: LoginDto.email },
-                { imatricule: LoginDto.imatricule }
+                { email: loginDto.identifier },
+                { imatricule: loginDto.identifier }
               ]
             },
         });
@@ -24,7 +24,7 @@ export class AuthService {
             throw new UnauthorizedException('Email ou matricule ou mot de passe incorrect');
         }
 
-        const passwordValid = await bcrypt.compare(LoginDto.password, user.password);
+        const passwordValid = await bcrypt.compare(loginDto.password, user.password);
         if (!passwordValid) {
             throw new UnauthorizedException('Email ou matricule ou mot de passe incorrect');
         }

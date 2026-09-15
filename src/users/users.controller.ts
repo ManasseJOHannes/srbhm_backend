@@ -6,17 +6,23 @@ import { Query } from '@nestjs/common';
 import { PaginationUserDto } from './dto/pagination-user.dto.js';
 import { AuthGuard } from '@nestjs/passport';
 import { UseGuards } from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator.js';
+import { RolesGuard } from '../auth/guards/roles.guard.js';
 
+@UseGuards(AuthGuard('jwt'),RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Roles(Role.ADMIN)
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
-  @UseGuards(AuthGuard('jwt'))
+  // @UseGuards(AuthGuard('jwt'))
+  @Roles(Role.ADMIN)
   @Get()
   findAll(@Query() pagination: PaginationUserDto) {
     return this.usersService.findAll(
@@ -37,6 +43,7 @@ export class UsersController {
     return this.usersService.update(+id, updateUserDto);
   }
 
+  @Roles(Role.ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(+id);

@@ -1,15 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { CreateUserRequestDto } from './dto/create-user-request.dto.js';
 import { UpdateUserRequestDto } from './dto/update-user-request.dto.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
 export class UserRequestsService {
-  create(createUserRequestDto: CreateUserRequestDto) {
-    return 'This action adds a new userRequest';
+  constructor(private readonly prisma:PrismaService){}
+  async create(createUserRequestDto: CreateUserRequestDto) {
+    return this.prisma.userRequest.create({
+      data: {
+        imatricule: createUserRequestDto.imatricule,
+        nom: createUserRequestDto.nom,
+        prenom: createUserRequestDto.prenom,
+        cin: createUserRequestDto.cin,
+        telephone: createUserRequestDto.telephone,
+        service: createUserRequestDto.service,
+        role: createUserRequestDto.role,
+        adresse: createUserRequestDto.adresse,
+        email: createUserRequestDto.email ?? null,
+      }
+    });
   }
 
   findAll() {
-    return `This action returns all userRequests`;
+    return this.prisma.userRequest.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
   }
 
   findOne(id: number) {

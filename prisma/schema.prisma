@@ -30,16 +30,16 @@ model User {
 }
 
 model UserRequest {
-  id         Int    @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   imatricule String
   nom        String
   prenom     String
   cin        String
   telephone  String
   service    String
-  role       String
+  role       Role
   adresse    String
-  email      String
+  email      String?
 
   status RequestStatus @default(PENDING)
 

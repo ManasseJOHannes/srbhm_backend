@@ -40,8 +40,10 @@ model UserRequest {
   role       Role
   adresse    String
   email      String?
+  
 
   status RequestStatus @default(PENDING)
+  rejectionReason String?
 
   createdAt DateTime @default(now())
   updateAt  DateTime @updatedAt

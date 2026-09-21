@@ -6,6 +6,7 @@ import { Roles } from '../auth/decorators/roles.decorator.js';
 import { Role } from '@prisma/client';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { AuthGuard } from '@nestjs/passport';
+import { ApproveUserRequestDto } from './dto/ApproveUserRequestDto.js';
 
 @Controller('user-requests')
 export class UserRequestsController {
@@ -28,9 +29,14 @@ export class UserRequestsController {
     return this.userRequestsService.findOne(+id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserRequestDto: UpdateUserRequestDto) {
-    return this.userRequestsService.update(+id, updateUserRequestDto);
+  @Patch(':id/approve')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.ADMIN)
+  approve(
+    @Param('id') id:string,
+    @Body() approveUserRequestDto: ApproveUserRequestDto
+  ) {
+    return this.userRequestsService.approve(Number(id), approveUserRequestDto);
   }
 
   @Delete(':id')

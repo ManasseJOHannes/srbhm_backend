@@ -2,36 +2,32 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { CreateUserRequestDto } from './dto/create-user-request.dto.js';
 import { UpdateUserRequestDto } from './dto/update-user-request.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import {RequestStatus} from '@prisma/client'
+import { RequestStatus } from '@prisma/client';
 import { ApproveUserRequestDto } from './dto/ApproveUserRequestDto.js';
-import * as bcrypt from 'bcrypt'
+import { RejectUserRequestDto } from './dto/reject-user-request.dto.js';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserRequestsService {
-  constructor(private readonly prisma:PrismaService){}
-  async approve(
-    id:number,
-    approveUserRequestDto: ApproveUserRequestDto,
-  ) {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async approve(id: number, approveUserRequestDto: ApproveUserRequestDto) {
     const request = await this.prisma.userRequest.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
     });
+
     if (!request) {
-      throw new NotFoundException('demande introuvable');
-    }
-    if (request.status !== RequestStatus.PENDING) {
-      throw new BadRequestException(
-        'Cette demande a déjà été traité'
-      );
+      throw new NotFoundException('Demande introuvable');
     }
 
-    const hashedPassword = await bcrypt.hash(
-      approveUserRequestDto.password,
-      10,
-    );
+    if (request.status !== RequestStatus.PENDING) {
+      throw new BadRequestException('Cette demande a déjà été traitée');
+    }
+
+    const hashedPassword = await bcrypt.hash(approveUserRequestDto.password, 10);
+
     return this.prisma.$transaction(async (tx) => {
+      // 1. Create the user
       const user = await tx.user.create({
         data: {
           imatricule: request.imatricule,
@@ -45,25 +41,53 @@ export class UserRequestsService {
           email: request.email,
           password: hashedPassword,
         },
-        omit:{
-          password:true
-        }
+        omit: {
+          password: true,
+        },
       });
 
+      // 2. Update the request status to APPROVED
       await tx.userRequest.update({
-        where:{
-          id:request.id
-        },
+        where: { id: request.id },
         data: {
           status: RequestStatus.APPROVED,
-        }
+        },
       });
+
       return {
-        message : 'Demande approuvée avec ssuccès',
+        message: 'Demande approuvée avec succès',
         user,
-      }
-    })
+      };
+    });
   }
+
+  async reject(id: number, rejectUserRequestDto: RejectUserRequestDto) {
+    const request = await this.prisma.userRequest.findUnique({
+      where: { id },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Demande introuvable');
+    }
+
+    if (request.status !== RequestStatus.PENDING) {
+      throw new BadRequestException('Cette demande a déjà été traitée');
+    }
+
+    const rejectedRequest = await this.prisma.userRequest.update({
+      where: { id: request.id },
+      data: {
+        status: RequestStatus.REJECTED,
+        rejectionReason: rejectUserRequestDto.reason,
+      },
+    });
+
+    return {
+      message: 'Demande rejetée avec succès',
+      request: rejectedRequest,
+    };
+  }
+
   async create(createUserRequestDto: CreateUserRequestDto) {
     return this.prisma.userRequest.create({
       data: {
@@ -76,27 +100,30 @@ export class UserRequestsService {
         role: createUserRequestDto.role,
         adresse: createUserRequestDto.adresse,
         email: createUserRequestDto.email ?? null,
-      }
+      },
     });
   }
 
   findAll() {
     return this.prisma.userRequest.findMany({
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: 'desc',
+      },
     });
   }
 
   findOne(id: number) {
-    return `This action returns a #${id} userRequest`;
+    return this.prisma.userRequest.findUnique({ where: { id } });
   }
 
   update(id: number, updateUserRequestDto: UpdateUserRequestDto) {
-    return `This action updates a #${id} userRequest`;
+    return this.prisma.userRequest.update({
+      where: { id },
+      data: updateUserRequestDto,
+    });
   }
 
   remove(id: number) {
-    return `This action removes a #${id} userRequest`;
+    return this.prisma.userRequest.delete({ where: { id } });
   }
 }

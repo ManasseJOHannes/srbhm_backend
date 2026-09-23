@@ -10,23 +10,49 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createUserDto: CreateAdminUserDto) {
-    const existingUser = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { imatricule: createUserDto.imatricule},
-          { cin: createUserDto.cin},
-          {telephone: createUserDto.telephone},
-          ...(createUserDto.email
-            ? [{ email: createUserDto.email}]
-            : []
-          ),
-        ],
+    if (createUserDto.email) {
+      const existingEmail = await this.prisma.user.findUnique({
+        where: {email: createUserDto.email}
+      })
+      if (existingEmail) {
+        throw new ConflictException(
+          `User with email ${createUserDto.email} already exist`
+        )
       }
-    })
-    if (existingUser) {
-      throw new ConflictException('User already exists');
     }
 
+    if (createUserDto.imatricule) {
+      const existingImatricule = await this.prisma.user.findUnique({
+        where: {imatricule: createUserDto.imatricule}
+      })
+      if (existingImatricule) {
+        throw new ConflictException(
+          `User with immatricule ${createUserDto.imatricule} already exist`
+        )
+      }
+    }
+
+    if (createUserDto.telephone) {
+      const existingTelephone = await this.prisma.user.findUnique({
+        where: {telephone: createUserDto.telephone}
+      })
+      if (existingTelephone) {
+        throw new ConflictException(
+          `User with telephone ${createUserDto.telephone} already exist`
+        )
+      }
+    }
+
+    if (createUserDto.cin) {
+      const existingCin = await this.prisma.user.findUnique({
+        where: {cin: createUserDto.cin}
+      })
+      if (existingCin) {
+        throw new ConflictException(
+          `User with cin ${createUserDto.cin} already exist`
+        )
+      }
+    }
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
     return this.prisma.user.create({
       data: {
@@ -158,6 +184,15 @@ export class UsersService {
       });
       if (existingCin && existingCin.id !== id) {
         throw new ConflictException(`User with cin ${updateUserDto.cin} already exists`);
+      }
+    }if (updateUserDto.telephone) {
+      const existingTelephone = await this.prisma.user.findUnique({
+        where: { telephone: updateUserDto.telephone},
+      })
+      if (existingTelephone && existingTelephone.id !== id){
+        throw new ConflictException(
+          `User with telephone ${updateUserDto.telephone} already exists`
+        )
       }
     }
     const data: any = {

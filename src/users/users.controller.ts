@@ -38,7 +38,7 @@ export class UsersController {
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(Number(id));
   }
-
+  @Roles(Role.ADMIN)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(+id, updateUserDto);

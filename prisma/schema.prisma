@@ -29,10 +29,36 @@ model User {
   updatedAt  DateTime @updatedAt
 }
 
+model UserRequest {
+  id         Int     @id @default(autoincrement())
+  imatricule String
+  nom        String
+  prenom     String
+  cin        String
+  telephone  String
+  service    String
+  role       Role
+  adresse    String
+  email      String?
+  
+
+  status RequestStatus @default(PENDING)
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updateAt  DateTime @updatedAt
+}
+
 enum Role {
   ADMIN
   ORDONNATEUR
   COMPTABLE
   DEPOSITEUR_COMPTABLE @map("DEPOSITEUR-COMPTABLE")
   USER
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

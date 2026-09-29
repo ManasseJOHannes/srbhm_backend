@@ -29,7 +29,7 @@ export class CreateUserRequestDto {
     'USER',
     'ORDONNATEUR',
     'COMPTABLE',
-    "DEPOSITEUR_COMPTABLES"
+    "DEPOSITEUR_COMPTABLE"
   ])
   role: Role;
 

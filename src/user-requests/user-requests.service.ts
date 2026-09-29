@@ -1,17 +1,102 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { CreateUserRequestDto } from './dto/create-user-request.dto.js';
 import { UpdateUserRequestDto } from './dto/update-user-request.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RequestStatus } from '@prisma/client';
-import { ApproveUserRequestDto } from './dto/ApproveUserRequestDto.js';
 import { RejectUserRequestDto } from './dto/reject-user-request.dto.js';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserRequestsService {
   constructor(private readonly prisma: PrismaService) {}
+  private generateTemporaryPassword(): string {
+    const randomNumber = Math.floor(1000 + Math.random() * 9000);
 
-  async approve(id: number, approveUserRequestDto: ApproveUserRequestDto) {
+    return `srbHM${randomNumber}`
+  }
+  private async checkUserDataExists(request: any) {
+    const existingUser = await this.prisma.user.findFirst({
+      where:{
+        OR:[
+          { imatricule: request.imatricule},
+          { cin: request.cin},
+          { telephone: request.telephone},
+          ...(request.email
+            ?[{email: request.email}]
+            : [])
+        ]
+      },
+      select: {
+        imatricule: true,
+        cin:true,
+        telephone: true,
+        email:true,
+      }
+    })
+    if (!existingUser) {
+      return;
+    }
+    if (existingUser.imatricule === request.imatricule) {
+      throw new ConflictException(`L'immatricule ${request.imatricule} est déjà utilisé.`,)
+    }
+    if (existingUser.cin === request.cin) {
+      throw new ConflictException(`Le CIN ${request.cin} est déjà utilisé.`,)
+    }
+    if (existingUser.telephone === request.telephone) {
+      throw new ConflictException(`Le numéro Téléphone ${request.telephone} est déjà utilisé`,)
+    }
+    if (
+      request.email && 
+      existingUser.email === request.email
+    ) {
+      throw new ConflictException(`L'email ${request.email} est déjà utilisé.`,)
+    }
+
+        const existingRequest = await this.prisma.userRequest.findFirst({
+      where:{
+        status: {
+          in: [RequestStatus.APPROVED, RequestStatus.PENDING],
+        },
+        OR:[
+          { imatricule: request.imatricule},
+          { cin: request.cin},
+          { telephone: request.telephone},
+          ...(request.email
+            ?[{email: request.email}]
+            : [])
+        ]
+      },
+      select: {
+        imatricule: true,
+        cin:true,
+        telephone: true,
+        email:true,
+      }
+    })
+    if (!existingRequest) {
+      return;
+    }
+    if (existingRequest.imatricule === request.imatricule) {
+      throw new ConflictException(`Une demande avec l'immatricule ${request.imatricule} est déjà en attente.`,)
+    }
+    if (existingRequest.cin === request.cin) {
+      throw new ConflictException(`Une demande avec le CIN ${request.cin} est déjà en attente.`,)
+    }
+    if (existingRequest.telephone === request.telephone) {
+      throw new ConflictException(`LUne demande avec le numéro ${request.telephone} est déjà en attente.`,)
+    }
+    if (
+      request.email && 
+      existingRequest.email === request.email
+    ) {
+      throw new ConflictException(`Une demande avec l'email ${request.email} est déjà en attente.`,)
+    }
+  }
+
+
+
+
+  async approve(id: number) {
     const request = await this.prisma.userRequest.findUnique({
       where: { id },
     });
@@ -23,10 +108,11 @@ export class UserRequestsService {
     if (request.status !== RequestStatus.PENDING) {
       throw new BadRequestException('Cette demande a déjà été traitée');
     }
+    await this.checkUserDataExists(request);
+    const temporaryPassword = this.generateTemporaryPassword()
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
-    const hashedPassword = await bcrypt.hash(approveUserRequestDto.password, 10);
-
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Create the user
       const user = await tx.user.create({
         data: {
@@ -47,7 +133,7 @@ export class UserRequestsService {
       });
 
       // 2. Update the request status to APPROVED
-      await tx.userRequest.update({
+      const updatedRequest =await tx.userRequest.update({
         where: { id: request.id },
         data: {
           status: RequestStatus.APPROVED,
@@ -55,10 +141,17 @@ export class UserRequestsService {
       });
 
       return {
-        message: 'Demande approuvée avec succès',
+        
         user,
+        updatedRequest,
       };
     });
+    return {
+      message: 'Demande approuvée avec succès',
+      temporaryPassword,
+      user: result.user,
+      request: result.updatedRequest ,
+    }
   }
 
   async reject(id: number, rejectUserRequestDto: RejectUserRequestDto) {
@@ -89,6 +182,7 @@ export class UserRequestsService {
   }
 
   async create(createUserRequestDto: CreateUserRequestDto) {
+    await this.checkUserDataExists(createUserRequestDto)
     return this.prisma.userRequest.create({
       data: {
         imatricule: createUserRequestDto.imatricule,
@@ -112,8 +206,14 @@ export class UserRequestsService {
     });
   }
 
-  findOne(id: number) {
-    return this.prisma.userRequest.findUnique({ where: { id } });
+  async findOne(id: number) {
+    const request = await this.prisma.userRequest.findUnique({
+      where: {id},
+    })
+    if(!request) {
+      throw new NotFoundException("Demande introuvable");
+    }
+    return request;
   }
 
   update(id: number, updateUserRequestDto: UpdateUserRequestDto) {

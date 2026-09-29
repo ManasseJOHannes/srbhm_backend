@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   UseGuards,
@@ -10,7 +11,6 @@ import {
 
 import { UserRequestsService } from './user-requests.service.js';
 import { CreateUserRequestDto } from './dto/create-user-request.dto.js';
-import { ApproveUserRequestDto } from './dto/ApproveUserRequestDto.js';
 import { RejectUserRequestDto } from './dto/reject-user-request.dto.js';
 
 import { AuthGuard } from '@nestjs/passport';
@@ -44,12 +44,9 @@ export class UserRequestsController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.ADMIN)
   approve(
-    @Param('id') id: string,
-    @Body() approveUserRequestDto: ApproveUserRequestDto,
-  ) {
+    @Param('id', ParseIntPipe) id: number,) {
     return this.userRequestsService.approve(
       Number(id),
-      approveUserRequestDto,
     );
   }
 
@@ -64,5 +61,12 @@ export class UserRequestsController {
       Number(id),
       rejectUserRequestDto,
     );
+  }
+
+  @Get(":id")
+  @UseGuards(AuthGuard("jwt"), RolesGuard)
+  @Roles(Role.ADMIN)
+  findOne(@Param("id") id:string){
+    return this.userRequestsService.findOne(Number(id));
   }
 }

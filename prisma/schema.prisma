@@ -62,3 +62,15 @@ enum RequestStatus {
   APPROVED
   REJECTED
 }
+model SOA {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  libelle     String
+  description String?
+  actif       Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("soas")
+}

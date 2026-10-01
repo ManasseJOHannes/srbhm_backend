@@ -1,10 +1,11 @@
 import {
   IsEmail,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
-  MinLength,
+  
 } from 'class-validator';
 
 import { Role } from '@prisma/client';
@@ -30,9 +31,8 @@ export class CreateAdminUserDto {
   @IsNotEmpty()
   telephone: string;
 
-  @IsString()
-  @IsNotEmpty()
-  service: string;
+  @IsInt()
+  soaId:number
 
   @IsEnum(Role)
   role: Role;
@@ -45,7 +45,4 @@ export class CreateAdminUserDto {
   @IsEmail()
   email?: string;
 
-  @IsString()
-  @MinLength(8)
-  password: string;
 }

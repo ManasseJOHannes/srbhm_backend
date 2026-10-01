@@ -20,7 +20,8 @@ model User {
   prenom     String
   cin        String   @unique
   telephone  String   @unique
-  service    String
+  soaId      Int
+  soa        SOA      @relation(fields: [soaId], references: [id])
   role       Role     @default(DEPOSITEUR_COMPTABLE)
   adresse    String
   email      String?  @unique
@@ -36,13 +37,13 @@ model UserRequest {
   prenom     String
   cin        String
   telephone  String
-  service    String
+  soaId      Int
+  soa        SOA     @relation(fields: [soaId], references: [id])
   role       Role
   adresse    String
   email      String?
-  
 
-  status RequestStatus @default(PENDING)
+  status          RequestStatus @default(PENDING)
   rejectionReason String?
 
   createdAt DateTime @default(now())
@@ -62,15 +63,19 @@ enum RequestStatus {
   APPROVED
   REJECTED
 }
+
 model SOA {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
   libelle     String
   description String?
-  actif       Boolean  @default(true)
+  actif       Boolean @default(true)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  users        User[]
+  userRequests UserRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("soas")
 }

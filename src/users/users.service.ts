@@ -8,8 +8,14 @@ import { CreateAdminUserDto } from './dto/create-admin-user.dto.js';
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+  private generateTemporaryPassword(): string {
+    const randomNumber = Math.floor(1000 + Math.random() * 9000);
+
+    return `srbHM${randomNumber}`;
+  }
 
   async create(createUserDto: CreateAdminUserDto) {
+    const temporaryPassword = this.generateTemporaryPassword();
     if (createUserDto.email) {
       const existingEmail = await this.prisma.user.findUnique({
         where: {email: createUserDto.email}
@@ -53,7 +59,7 @@ export class UsersService {
         )
       }
     }
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
     return this.prisma.user.create({
       data: {
         imatricule: createUserDto.imatricule,
@@ -61,7 +67,7 @@ export class UsersService {
         prenom: createUserDto.prenom,
         cin: createUserDto.cin,
         telephone: createUserDto.telephone,
-        service: createUserDto.service,
+        soaId: createUserDto.soaId,
         role: createUserDto.role,
         adresse: createUserDto.adresse,
         email: createUserDto.email,
@@ -74,7 +80,7 @@ export class UsersService {
         prenom: true,
         cin: true,
         telephone: true,
-        service: true,
+        soa: true,
         role: true,
         adresse: true,
         email: true,
@@ -96,7 +102,24 @@ export class UsersService {
           { imatricule: { contains: search, mode: 'insensitive' as const} },
           { cin: { contains: search, mode: 'insensitive' as const} },
           { telephone: { contains: search, mode: 'insensitive' as const} },
-          { service: { contains: search, mode: 'insensitive' as const} },
+          { soa: {
+            OR:[
+              { 
+                code: {
+                   contains: search, 
+                   mode: 'insensitive' as const
+                  }, 
+                },
+              {
+                libelle: {
+                  contains: search, 
+                  mode: 'insensitive' as const
+                }
+              }
+            ]
+
+            },
+          },
           { adresse: { contains: search, mode: 'insensitive' as const} },
         ],
       }),
@@ -120,7 +143,7 @@ export class UsersService {
           prenom: true,
           cin: true,
           telephone: true,
-          service: true,
+          soa: true,
           role: true,
           adresse: true,
           email: true,
@@ -149,7 +172,7 @@ export class UsersService {
         prenom: true,
         cin: true,
         telephone: true,
-        service: true,
+        soa: true,
         role: true,
         adresse: true,
         email: true,
@@ -201,7 +224,7 @@ export class UsersService {
       prenom: updateUserDto.prenom,
       cin: updateUserDto.cin,
       telephone: updateUserDto.telephone,
-      service: updateUserDto.service,
+      soaId: updateUserDto.soaId,
       role: updateUserDto.role,
       adresse: updateUserDto.adresse,
       email: updateUserDto.email,
@@ -219,7 +242,7 @@ export class UsersService {
         prenom: true,
         cin: true,
         telephone: true,
-        service: true,
+        soa: true,
         role: true,
         adresse: true,
         email: true,

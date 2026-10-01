@@ -15,81 +15,108 @@ export class UserRequestsService {
     return `srbHM${randomNumber}`
   }
   private async checkUserDataExists(request: any) {
+    // 1. Vérifier si les données existent déjà dans User
     const existingUser = await this.prisma.user.findFirst({
-      where:{
-        OR:[
-          { imatricule: request.imatricule},
-          { cin: request.cin},
-          { telephone: request.telephone},
+      where: {
+        OR: [
+          { imatricule: request.imatricule },
+          { cin: request.cin },
+          { telephone: request.telephone },
           ...(request.email
-            ?[{email: request.email}]
-            : [])
-        ]
+            ? [{ email: request.email }]
+            : []),
+        ],
       },
       select: {
         imatricule: true,
-        cin:true,
+        cin: true,
         telephone: true,
-        email:true,
+        email: true,
+      },
+    });
+
+    if (existingUser) {
+      if (existingUser.imatricule === request.imatricule) {
+        throw new ConflictException(
+          `L'immatricule ${request.imatricule} est déjà utilisé.`,
+        );
       }
-    })
-    if (!existingUser) {
-      return;
-    }
-    if (existingUser.imatricule === request.imatricule) {
-      throw new ConflictException(`L'immatricule ${request.imatricule} est déjà utilisé.`,)
-    }
-    if (existingUser.cin === request.cin) {
-      throw new ConflictException(`Le CIN ${request.cin} est déjà utilisé.`,)
-    }
-    if (existingUser.telephone === request.telephone) {
-      throw new ConflictException(`Le numéro Téléphone ${request.telephone} est déjà utilisé`,)
-    }
-    if (
-      request.email && 
-      existingUser.email === request.email
-    ) {
-      throw new ConflictException(`L'email ${request.email} est déjà utilisé.`,)
+
+      if (existingUser.cin === request.cin) {
+        throw new ConflictException(
+          `Le CIN ${request.cin} est déjà utilisé.`,
+        );
+      }
+
+      if (existingUser.telephone === request.telephone) {
+        throw new ConflictException(
+          `Le numéro téléphone ${request.telephone} est déjà utilisé.`,
+        );
+      }
+
+      if (
+        request.email &&
+        existingUser.email === request.email
+      ) {
+        throw new ConflictException(
+          `L'email ${request.email} est déjà utilisé.`,
+        );
+      }
     }
 
-        const existingRequest = await this.prisma.userRequest.findFirst({
-      where:{
+    // 2. Vérifier les demandes existantes
+    const existingRequest = await this.prisma.userRequest.findFirst({
+      where: {
         status: {
-          in: [RequestStatus.APPROVED, RequestStatus.PENDING],
+          in: [
+            RequestStatus.PENDING,
+            RequestStatus.APPROVED,
+          ],
         },
-        OR:[
-          { imatricule: request.imatricule},
-          { cin: request.cin},
-          { telephone: request.telephone},
+        OR: [
+          { imatricule: request.imatricule },
+          { cin: request.cin },
+          { telephone: request.telephone },
           ...(request.email
-            ?[{email: request.email}]
-            : [])
-        ]
+            ? [{ email: request.email }]
+            : []),
+        ],
       },
       select: {
         imatricule: true,
-        cin:true,
+        cin: true,
         telephone: true,
-        email:true,
+        email: true,
+      },
+    });
+
+    if (existingRequest) {
+      if (existingRequest.imatricule === request.imatricule) {
+        throw new ConflictException(
+          `Une demande avec l'immatricule ${request.imatricule} existe déjà.`,
+        );
       }
-    })
-    if (!existingRequest) {
-      return;
-    }
-    if (existingRequest.imatricule === request.imatricule) {
-      throw new ConflictException(`Une demande avec l'immatricule ${request.imatricule} est déjà en attente.`,)
-    }
-    if (existingRequest.cin === request.cin) {
-      throw new ConflictException(`Une demande avec le CIN ${request.cin} est déjà en attente.`,)
-    }
-    if (existingRequest.telephone === request.telephone) {
-      throw new ConflictException(`LUne demande avec le numéro ${request.telephone} est déjà en attente.`,)
-    }
-    if (
-      request.email && 
-      existingRequest.email === request.email
-    ) {
-      throw new ConflictException(`Une demande avec l'email ${request.email} est déjà en attente.`,)
+
+      if (existingRequest.cin === request.cin) {
+        throw new ConflictException(
+          `Une demande avec le CIN ${request.cin} existe déjà.`,
+        );
+      }
+
+      if (existingRequest.telephone === request.telephone) {
+        throw new ConflictException(
+          `Une demande avec le numéro téléphone ${request.telephone} existe déjà.`,
+        );
+      }
+
+      if (
+        request.email &&
+        existingRequest.email === request.email
+      ) {
+        throw new ConflictException(
+          `Une demande avec l'email ${request.email} existe déjà.`,
+        );
+      }
     }
   }
 
@@ -121,7 +148,7 @@ export class UserRequestsService {
           prenom: request.prenom,
           cin: request.cin,
           telephone: request.telephone,
-          service: request.service,
+          soaId: request.soaId,
           role: request.role,
           adresse: request.adresse,
           email: request.email,
@@ -182,7 +209,22 @@ export class UserRequestsService {
   }
 
   async create(createUserRequestDto: CreateUserRequestDto) {
-    await this.checkUserDataExists(createUserRequestDto)
+    await this.checkUserDataExists(createUserRequestDto);
+
+    const soa = await this.prisma.sOA.findUnique({
+      where: {
+        id: createUserRequestDto.soaId,
+      },
+    });
+
+    if (!soa) {
+      throw new NotFoundException("SOA introuvable");
+    }
+
+    if (!soa.actif) {
+      throw new BadRequestException("Ce SOA n'est pas actif");
+    }
+
     return this.prisma.userRequest.create({
       data: {
         imatricule: createUserRequestDto.imatricule,
@@ -190,10 +232,13 @@ export class UserRequestsService {
         prenom: createUserRequestDto.prenom,
         cin: createUserRequestDto.cin,
         telephone: createUserRequestDto.telephone,
-        service: createUserRequestDto.service,
+        soaId: createUserRequestDto.soaId,
         role: createUserRequestDto.role,
         adresse: createUserRequestDto.adresse,
         email: createUserRequestDto.email ?? null,
+      },
+      include: {
+        soa: true,
       },
     });
   }
@@ -203,12 +248,18 @@ export class UserRequestsService {
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        soa: true,
+      },
     });
   }
 
   async findOne(id: number) {
     const request = await this.prisma.userRequest.findUnique({
       where: {id},
+      include: {
+        soa: true,
+      },
     })
     if(!request) {
       throw new NotFoundException("Demande introuvable");

@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail,  IsIn, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 import { Role } from '@prisma/client';
 export class CreateUserRequestDto {
   @IsString()
@@ -21,12 +21,10 @@ export class CreateUserRequestDto {
   @MinLength(1)
   telephone: string;
 
-  @IsString()
-  @MinLength(1)
-  service: string;
+  @IsInt()
+  soaId: number;
 
   @IsIn([
-    'USER',
     'ORDONNATEUR',
     'COMPTABLE',
     "DEPOSITEUR_COMPTABLE"

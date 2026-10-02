@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
   provider = "prisma-client-js"
@@ -73,9 +68,33 @@ model SOA {
 
   users        User[]
   userRequests UserRequest[]
+  exercices    Exercice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("soas")
+}
+
+enum StatutExercice {
+  EN_COURS
+  CLOTURE
+}
+
+model Exercice {
+  id        Int            @id @default(autoincrement())
+  annee     Int
+  dateDebut DateTime
+  dateFin   DateTime
+  statut    StatutExercice @default(EN_COURS)
+
+  soaId     Int
+  soa       SOA            @relation(fields: [soaId], references: [id])
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([soaId, annee])
+  @@index([soaId])
+  @@index([statut])
 }

@@ -7,11 +7,11 @@ import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 @Controller('soa')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class SoaController {
   constructor(private readonly soaService: SoaService) {}
 
   @Roles(Role.ADMIN)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Post()
   create(@Body() createSoaDto: CreateSoaDto) {
     return this.soaService.create(createSoaDto);
@@ -28,12 +28,14 @@ export class SoaController {
   }
 
   @Roles(Role.ADMIN)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateSoaDto: UpdateSoaDto) {
     return this.soaService.update(+id, updateSoaDto);
   }
 
   @Roles(Role.ADMIN)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.soaService.remove(+id);

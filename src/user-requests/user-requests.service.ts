@@ -14,6 +14,62 @@ export class UserRequestsService {
 
     return `srbHM${randomNumber}`
   }
+  private async checkRequestDataExists(request: any) {
+      // 2. Vérifier les demandes existantes
+      const existingRequest = await this.prisma.userRequest.findFirst({
+        where: {
+          status: {
+            in: [
+              RequestStatus.PENDING,
+              RequestStatus.APPROVED,
+            ],
+          },
+          OR: [
+            { imatricule: request.imatricule },
+            { cin: request.cin },
+            { telephone: request.telephone },
+            ...(request.email
+              ? [{ email: request.email }]
+              : []),
+          ],
+        },
+        select: {
+          imatricule: true,
+          cin: true,
+          telephone: true,
+          email: true,
+        },
+      });
+
+      if (existingRequest) {
+        if (existingRequest.imatricule === request.imatricule) {
+          throw new ConflictException(
+            `Une demande avec l'immatricule ${request.imatricule} existe déjà.`,
+          );
+        }
+
+        if (existingRequest.cin === request.cin) {
+          throw new ConflictException(
+            `Une demande avec le CIN ${request.cin} existe déjà.`,
+          );
+        }
+
+        if (existingRequest.telephone === request.telephone) {
+          throw new ConflictException(
+            `Une demande avec le numéro téléphone ${request.telephone} existe déjà.`,
+          );
+        }
+
+        if (
+          request.email &&
+          existingRequest.email === request.email
+        ) {
+          throw new ConflictException(
+            `Une demande avec l'email ${request.email} existe déjà.`,
+          );
+        }
+      }
+  }
   private async checkUserDataExists(request: any) {
     // 1. Vérifier si les données existent déjà dans User
     const existingUser = await this.prisma.user.findFirst({
@@ -64,60 +120,7 @@ export class UserRequestsService {
       }
     }
 
-    // 2. Vérifier les demandes existantes
-    const existingRequest = await this.prisma.userRequest.findFirst({
-      where: {
-        status: {
-          in: [
-            RequestStatus.PENDING,
-            RequestStatus.APPROVED,
-          ],
-        },
-        OR: [
-          { imatricule: request.imatricule },
-          { cin: request.cin },
-          { telephone: request.telephone },
-          ...(request.email
-            ? [{ email: request.email }]
-            : []),
-        ],
-      },
-      select: {
-        imatricule: true,
-        cin: true,
-        telephone: true,
-        email: true,
-      },
-    });
-
-    if (existingRequest) {
-      if (existingRequest.imatricule === request.imatricule) {
-        throw new ConflictException(
-          `Une demande avec l'immatricule ${request.imatricule} existe déjà.`,
-        );
-      }
-
-      if (existingRequest.cin === request.cin) {
-        throw new ConflictException(
-          `Une demande avec le CIN ${request.cin} existe déjà.`,
-        );
-      }
-
-      if (existingRequest.telephone === request.telephone) {
-        throw new ConflictException(
-          `Une demande avec le numéro téléphone ${request.telephone} existe déjà.`,
-        );
-      }
-
-      if (
-        request.email &&
-        existingRequest.email === request.email
-      ) {
-        throw new ConflictException(
-          `Une demande avec l'email ${request.email} existe déjà.`,
-        );
-      }
-    }
+    
   }
 
 
@@ -210,6 +213,7 @@ export class UserRequestsService {
 
   async create(createUserRequestDto: CreateUserRequestDto) {
     await this.checkUserDataExists(createUserRequestDto);
+    await this.checkRequestDataExists(createUserRequestDto);
 
     const soa = await this.prisma.sOA.findUnique({
       where: {

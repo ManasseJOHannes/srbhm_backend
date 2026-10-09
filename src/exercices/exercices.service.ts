@@ -1,15 +1,20 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateExerciceDto } from './dto/update-exercice.dto.js';
 import { CreateExerciceDto} from './dto/create-exercice.dto.js';
+import { MouvementService } from '../mouvement/mouvement.service.js';
 
 @Injectable()
 export class ExercicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mouvementService: MouvementService,
+  ) {}
 
 async create(
   createExerciceDto: CreateExerciceDto,
@@ -65,17 +70,33 @@ async create(
   const dateDebut = new Date(Date.UTC(annee, 0, 1));
   const dateFin = new Date(Date.UTC(annee, 11, 31));
 
-  return this.prisma.exercice.create({
-    data: {
-      annee,
-      dateDebut,
-      dateFin,
-      soaId,
-      statut: 'EN_COURS',
-    },
-    include: {
-      soa: true,
-    },
+  return this.prisma.$transaction(async (tx) => {
+    const exercice = await tx.exercice.create({
+      data: {
+        annee,
+        dateDebut,
+        dateFin,
+        soaId,
+        statut: 'EN_COURS',
+      },
+    });
+
+    await tx.compteMatiere.create({
+      data: { exerciceId: exercice.id },
+    });
+    await this.mouvementService.reporterStockDepuisExercicePrecedent(
+      exercice.id,
+      userId,
+      tx,
+    );
+
+    return tx.exercice.findUnique({
+      where: { id: exercice.id },
+      include: {
+        soa: true,
+        compteMatiere: { include: { details: true } },
+      },
+    });
   });
 }
 
@@ -146,6 +167,9 @@ async create(
     if(!user){
       throw new NotFoundException('Utilisateur introuvable');
     }
+    if (user.role !== 'DEPOSITEUR_COMPTABLE') {
+      throw new ForbiddenException('Seul le dépositaire-comptable peut modifier un exercice');
+    }
     const exercice = await this.prisma.exercice.findUnique({
       where: { id },
     });
@@ -176,6 +200,9 @@ async create(
     });
     if (!user) {
       throw new NotFoundException('Utilisateur introuvable');
+    }
+    if (user.role !== 'DEPOSITEUR_COMPTABLE') {
+      throw new ForbiddenException('Seul le dépositaire-comptable peut supprimer un exercice');
     }
     const exercice = await this.prisma.exercice.findUnique({
       where: { id },

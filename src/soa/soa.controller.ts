@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req } from '@nestjs/common';
 import { SoaService } from './soa.service.js';
 import { CreateSoaDto } from './dto/create-soa.dto.js';
 import { UpdateSoaDto } from './dto/update-soa.dto.js';
@@ -17,14 +17,24 @@ export class SoaController {
     return this.soaService.create(createSoaDto);
   }
 
-  @Get()
-  findAll() {
-    return this.soaService.findAll();
+  // Minimal public list required by the unauthenticated registration form.
+  @Get('actifs')
+  findActive() {
+    return this.soaService.findActive();
   }
 
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Get()
+  findAll(@Req() req: any) {
+    return this.soaService.findAll(req.user.id);
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.soaService.findOne(+id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.soaService.findOne(+id, req.user.id);
   }
 
   @Roles(Role.ADMIN)

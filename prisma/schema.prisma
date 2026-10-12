@@ -67,6 +67,7 @@ model Exercice {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   compteMatiere CompteMatiere?
+  inventaire    Inventaire?
   soa           SOA            @relation(fields: [soaId], references: [id])
   lotsStock     LotStock[]
   mouvements    Mouvement[]
@@ -96,6 +97,7 @@ model Article {
   nomenclatureId Int
   nomenclature   Nomenclature          @relation(fields: [nomenclatureId], references: [id])
   details        DetailCompteMatiere[]
+  lignesInventaire LigneInventaire[]
   lotsStock      LotStock[]
   mouvements     Mouvement[]
 
@@ -183,6 +185,7 @@ model LotStock {
   quantiteRestante      Decimal              @db.Decimal(12, 2)
   prixUnitaire          Decimal              @db.Decimal(12, 2)
   lotParentId           Int?
+  observation           String?
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   affectations          AffectationSortie[]
@@ -192,12 +195,52 @@ model LotStock {
   lotParent             LotStock?            @relation("LotTransfert", fields: [lotParentId], references: [id], onDelete: Restrict)
   lotsEnfants           LotStock[]           @relation("LotTransfert")
   mouvementEntree       Mouvement?           @relation("MouvementEntreeLot", fields: [mouvementEntreeId], references: [id], onDelete: Restrict)
+  observations          ObservationStock[]
 
   @@index([articleId, dateOrigine, id])
   @@index([exerciceId])
   @@index([mouvementEntreeId])
   @@index([detailCompteMatiereId])
   @@index([lotParentId])
+}
+
+model ObservationStock {
+  id         Int       @id @default(autoincrement())
+  lotStockId Int
+  texte      String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lotStock   LotStock  @relation(fields: [lotStockId], references: [id], onDelete: Restrict)
+
+  @@index([lotStockId])
+}
+
+model Inventaire {
+  id             Int                @id @default(autoincrement())
+  exerciceId     Int                @unique
+  dateInventaire DateTime
+  lieu           String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  exercice       Exercice           @relation(fields: [exerciceId], references: [id], onDelete: Restrict)
+  lignes         LigneInventaire[]
+}
+
+model LigneInventaire {
+  id                Int        @id @default(autoincrement())
+  inventaireId      Int
+  articleId         Int
+  prixUnitaire      Decimal    @db.Decimal(12, 2)
+  quantitePhysique  Decimal    @db.Decimal(12, 2)
+  observation       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  inventaire        Inventaire @relation(fields: [inventaireId], references: [id], onDelete: Restrict)
+  article           Article    @relation(fields: [articleId], references: [id], onDelete: Restrict)
+
+  @@unique([inventaireId, articleId, prixUnitaire])
+  @@index([inventaireId])
+  @@index([articleId])
 }
 
 enum Role {

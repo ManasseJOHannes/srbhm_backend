@@ -14,9 +14,10 @@ import { MouvementModule } from './mouvement/mouvement.module.js';
 import { DetailCompteMatieresModule } from './detail-compte-matieres/detail-compte-matieres.module.js';
 import { StockReportService } from './stock-report/stock-report.service.js';
 import { StockReportModule } from './stock-report/stock-report.module.js';
+import { InventaireModule } from './inventaire/inventaire.module.js';
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, UserRequestsModule, SoaModule, ExercicesModule, ArticleModule, CompteMatieresModule, NomenclaturesModule, MouvementModule, DetailCompteMatieresModule, StockReportModule],
+  imports: [PrismaModule, UsersModule, AuthModule, UserRequestsModule, SoaModule, ExercicesModule, ArticleModule, CompteMatieresModule, NomenclaturesModule, MouvementModule, DetailCompteMatieresModule, StockReportModule, InventaireModule],
   controllers: [AppController],
   providers: [AppService, StockReportService],
 })

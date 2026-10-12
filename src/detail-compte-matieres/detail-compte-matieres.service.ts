@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateDetailCompteMatiereDto } from './dto/create-detail-compte-matiere.dto.js';
+import { ecritureObservationLot } from '../observations-stock/observation-stock.helper.js';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -110,6 +111,7 @@ export class DetailCompteMatieresService {
             quantiteInitiale: quantiteInitiale,
             quantiteRestante: quantiteInitiale,
             prixUnitaire: dto.prixUnitaire,
+            ...ecritureObservationLot(dto.observation),
           },
         });
       }

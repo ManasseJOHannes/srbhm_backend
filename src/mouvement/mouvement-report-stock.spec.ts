@@ -286,6 +286,124 @@ describe('MouvementService.reporterStockVersExerciceSuivant', () => {
     }]);
   });
 
+  it('conserve l’observation du détail source dans le détail reporté', async () => {
+    const { service, tx } = makeReportService({
+      sourceLots: [{
+        id: 12,
+        articleId: 4,
+        exerciceId: 14,
+        typeOrigine: 'STOCK_INITIAL',
+        mouvementEntreeId: null,
+        detailCompteMatiereId: 40,
+        lotParentId: null,
+        prixUnitaire,
+        quantiteInitiale: new Prisma.Decimal('7'),
+        quantiteRestante: new Prisma.Decimal('7'),
+        dateOrigine: new Date(Date.UTC(2000, 0, 1)),
+      }],
+      sourceDetails: [{
+        id: 40,
+        articleId: 4,
+        prixUnitaire,
+        existantDebut: new Prisma.Decimal('7'),
+        observation: 'OE N° 02/96',
+      }],
+      targetDetails: [],
+    });
+
+    const result = await service.reporterStockVersExerciceSuivant(14, 5, 13);
+
+    expect(tx.detailCompteMatiere.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        compteMatiereId: 6,
+        articleId: 4,
+        existantDebut: new Prisma.Decimal('7'),
+        observation: 'OE N° 02/96',
+      }),
+    });
+    expect(result.detailsCrees).toBe(1);
+  });
+
+  it('utilise la mention générique quand le détail source est sans observation', async () => {
+    const { service, tx } = makeReportService({
+      sourceLots: [{
+        id: 12,
+        articleId: 4,
+        exerciceId: 14,
+        typeOrigine: 'STOCK_INITIAL',
+        mouvementEntreeId: null,
+        detailCompteMatiereId: 40,
+        lotParentId: null,
+        prixUnitaire,
+        quantiteInitiale: new Prisma.Decimal('7'),
+        quantiteRestante: new Prisma.Decimal('7'),
+        dateOrigine: new Date(Date.UTC(2000, 0, 1)),
+      }],
+      sourceDetails: [{
+        id: 40,
+        articleId: 4,
+        prixUnitaire,
+        existantDebut: new Prisma.Decimal('7'),
+        observation: null,
+      }],
+      targetDetails: [],
+    });
+
+    await service.reporterStockVersExerciceSuivant(14, 5, 13);
+
+    expect(tx.detailCompteMatiere.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        observation: 'Stock reporté de l’exercice 2000',
+      }),
+    });
+  });
+
+  it('ne touche jamais à l’observation d’un détail cible existant', async () => {
+    const { service, tx } = makeReportService({
+      sourceLots: [{
+        id: 12,
+        articleId: 4,
+        exerciceId: 14,
+        typeOrigine: 'STOCK_INITIAL',
+        mouvementEntreeId: null,
+        detailCompteMatiereId: 40,
+        lotParentId: null,
+        prixUnitaire,
+        quantiteInitiale: new Prisma.Decimal('7'),
+        quantiteRestante: new Prisma.Decimal('7'),
+        dateOrigine: new Date(Date.UTC(2000, 0, 1)),
+      }],
+      sourceDetails: [{
+        id: 40,
+        articleId: 4,
+        prixUnitaire,
+        existantDebut: new Prisma.Decimal('7'),
+        observation: 'OE N° 02/96',
+      }],
+      targetDetails: [{
+        id: 31,
+        articleId: 4,
+        prixUnitaire,
+        existantDebut: new Prisma.Decimal('0'),
+        entrees: new Prisma.Decimal('0'),
+        sorties: new Prisma.Decimal('0'),
+        observation: 'Conserver ceci',
+      }],
+    });
+
+    await service.reporterStockVersExerciceSuivant(14, 5, 13);
+
+    expect(tx.detailCompteMatiere.create).not.toHaveBeenCalled();
+    expect(tx.detailCompteMatiere.update).toHaveBeenCalledWith({
+      where: { id: 31 },
+      data: {
+        existantDebut: new Prisma.Decimal('7'),
+        entrees: new Prisma.Decimal('0'),
+        sorties: new Prisma.Decimal('0'),
+      },
+    });
+  });
+
   it('est idempotent et ne double pas le lot parent/enfant déjà consommé partiellement', async () => {
     const childLot = {
       id: 90,

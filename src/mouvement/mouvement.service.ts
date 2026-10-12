@@ -8,6 +8,7 @@ import { Prisma, Role } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMouvementDto } from './dto/create-mouvement.dto.js';
+import { ecritureObservationLot } from '../observations-stock/observation-stock.helper.js';
 
 @Injectable()
 export class MouvementService {
@@ -123,6 +124,7 @@ export class MouvementService {
             quantiteInitiale: quantite,
             quantiteRestante: quantite,
             prixUnitaire,
+            ...ecritureObservationLot(dto.observation),
           },
         });
 
@@ -498,6 +500,7 @@ export class MouvementService {
             quantiteInitiale: quantite,
             quantiteRestante: quantite,
             prixUnitaire,
+            ...ecritureObservationLot(dto.observation),
           },
         });
       } else {
@@ -852,6 +855,7 @@ export class MouvementService {
                 quantiteInitiale: quantiteOuverture,
                 quantiteRestante: quantiteOuverture,
                 prixUnitaire: detail.prixUnitaire,
+                ...ecritureObservationLot(detail.observation),
               },
             });
             continue;
@@ -952,6 +956,7 @@ export class MouvementService {
                 articleId: true,
                 prixUnitaire: true,
                 quantite: true,
+                observation: true,
               },
             })
           : [];
@@ -994,6 +999,7 @@ export class MouvementService {
               quantiteInitiale: mouvement.quantite,
               quantiteRestante: mouvement.quantite,
               prixUnitaire: mouvement.prixUnitaire,
+              ...ecritureObservationLot(mouvement.observation),
             },
           });
           lotsIntermediaires.push(lot);
@@ -1309,6 +1315,14 @@ export class MouvementService {
         let detailsCrees = 0;
         let detailsMisAJour = 0;
         const compteCible = cible.compteMatiere;
+        // Référence d'observation du Compte Matière source, par article+prix :
+        // un stock reporté conserve l'observation de son détail d'origine.
+        const observationsSourceParCle = new Map(
+          (source.compteMatiere?.details ?? []).map((ligne) => [
+            cleStock(ligne.articleId, new Prisma.Decimal(ligne.prixUnitaire)),
+            ligne.observation,
+          ]),
+        );
         if (compteCible) {
           for (const detail of detailsAReporter) {
             const actuel = compteCible.details.find(
@@ -1339,6 +1353,17 @@ export class MouvementService {
                 new Prisma.Decimal(0),
               );
             if (!actuel) {
+              // Le stock reporté conserve l'observation de son détail
+              // d'origine ; la mention générique ne sert que de repli
+              // quand la source n'en porte aucune. Un détail existant
+              // n'est jamais retouché (voir branches ci-dessous).
+              const observationSource = observationsSourceParCle.get(
+                cleStock(detail.articleId, detail.prixUnitaire),
+              );
+              const observationReport =
+                observationSource && observationSource.trim().length > 0
+                  ? observationSource
+                  : `Stock reporté de l’exercice ${source.annee}`;
               await tx.detailCompteMatiere.create({
                 data: {
                   compteMatiereId: compteCible.id,
@@ -1347,7 +1372,7 @@ export class MouvementService {
                   existantDebut: detail.quantite,
                   entrees: entreesMouvements,
                   sorties: sortiesMouvements,
-                  observation: `Stock reporté de l’exercice ${source.annee}`,
+                  observation: observationReport,
                 },
               });
               detailsCrees += 1;
@@ -1446,6 +1471,7 @@ export class MouvementService {
         articleId: true,
         prixUnitaire: true,
         quantite: true,
+        observation: true,
       },
     });
 
@@ -1463,6 +1489,7 @@ export class MouvementService {
           quantiteInitiale: mouvement.quantite,
           quantiteRestante: mouvement.quantite,
           prixUnitaire: mouvement.prixUnitaire,
+          ...ecritureObservationLot(mouvement.observation),
         },
       });
     }

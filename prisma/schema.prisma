@@ -64,13 +64,121 @@ model Exercice {
   dateFin       DateTime
   statut        StatutExercice @default(EN_COURS)
   soaId         Int
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  soa           SOA            @relation(fields: [soaId], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  soa           SOA                   @relation(fields: [soaId], references: [id])
+  compteMatiere CompteMatiere?
+  inventaire    Inventaire?
+  mouvements    Mouvement[]
 
   @@unique([soaId, annee])
   @@index([soaId])
   @@index([statut])
+}
+
+model Nomenclature {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  libelle     String
+  description String?
+  actif       Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  articles    Article[]
+}
+
+model Article {
+  id             Int                   @id @default(autoincrement())
+  designation    String
+  unite          String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  nomenclatureId Int
+  nomenclature   Nomenclature          @relation(fields: [nomenclatureId], references: [id])
+  details        DetailCompteMatiere[]
+  lignesInventaire LigneInventaire[]
+  mouvements     Mouvement[]
+
+  @@index([nomenclatureId])
+}
+
+model CompteMatiere {
+  id                   Int                   @id @default(autoincrement())
+  exerciceId           Int                   @unique
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  valeurExistanteDebut Decimal               @default(0)
+  valeurEntrees        Decimal               @default(0)
+  valeurSorties        Decimal               @default(0)
+  valeurRestante       Decimal               @default(0)
+  exercice             Exercice              @relation(fields: [exerciceId], references: [id])
+  details              DetailCompteMatiere[]
+}
+
+model DetailCompteMatiere {
+  id              Int           @id @default(autoincrement())
+  compteMatiereId Int
+  articleId       Int
+  folioGrandLivre Int?
+  prixUnitaire    Decimal
+  existantDebut   Decimal       @default(0)
+  entrees         Decimal       @default(0)
+  sorties         Decimal       @default(0)
+  observation     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  article         Article       @relation(fields: [articleId], references: [id])
+  compteMatiere   CompteMatiere @relation(fields: [compteMatiereId], references: [id])
+
+  @@unique([compteMatiereId, articleId, prixUnitaire])
+  @@index([compteMatiereId])
+  @@index([articleId])
+}
+
+model Mouvement {
+  id           Int           @id @default(autoincrement())
+  type         TypeMouvement
+  date         DateTime
+  exerciceId   Int
+  articleId    Int
+  quantite     Decimal
+  prixUnitaire Decimal
+  observation  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  article      Article       @relation(fields: [articleId], references: [id])
+  exercice     Exercice      @relation(fields: [exerciceId], references: [id])
+
+  @@index([exerciceId])
+  @@index([articleId])
+  @@index([type])
+  @@index([date])
+}
+
+model Inventaire {
+  id             Int               @id @default(autoincrement())
+  exerciceId     Int               @unique
+  dateInventaire DateTime
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  exercice       Exercice          @relation(fields: [exerciceId], references: [id])
+  lignes         LigneInventaire[]
+}
+
+model LigneInventaire {
+  id               Int        @id @default(autoincrement())
+  inventaireId     Int
+  articleId        Int
+  prixUnitaire     Decimal
+  quantitePhysique Decimal    @db.Decimal(12, 2)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  inventaire       Inventaire @relation(fields: [inventaireId], references: [id])
+  article          Article    @relation(fields: [articleId], references: [id])
+
+  @@unique([inventaireId, articleId, prixUnitaire])
+  @@index([inventaireId])
+  @@index([articleId])
 }
 
 enum Role {
@@ -90,4 +198,9 @@ enum RequestStatus {
 enum StatutExercice {
   EN_COURS
   CLOTURE
+}
+
+enum TypeMouvement {
+  ENTREE
+  SORTIE
 }

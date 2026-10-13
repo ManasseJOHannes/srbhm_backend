@@ -7,11 +7,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateExerciceDto } from './dto/update-exercice.dto.js';
 import { CreateExerciceDto} from './dto/create-exercice.dto.js';
+import { CompteMatieresService } from '../compte-matieres/compte-matieres.service.js';
 
 @Injectable()
 export class ExercicesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly compteMatieresService: CompteMatieresService,
   ) {}
 
 async create(
@@ -68,7 +70,7 @@ async create(
   const dateDebut = new Date(Date.UTC(annee, 0, 1));
   const dateFin = new Date(Date.UTC(annee, 11, 31));
 
-  return this.prisma.$transaction(async (tx) => {
+  const created = await this.prisma.$transaction(async (tx) => {
     const exercice = await tx.exercice.create({
       data: {
         annee,
@@ -86,6 +88,16 @@ async create(
       },
     });
   });
+
+  // Report différé : depuis le dernier exercice clôturé antérieur
+  // (remonte la chaîne si N+1 inexistant ou non clôturé).
+  const report =
+    await this.compteMatieresService.reporterDepuisDernierCloture(
+      soaId,
+      annee,
+    );
+
+  return { exercice: created, report };
 }
 
   async findAll(userId: number) {
@@ -168,14 +180,25 @@ async create(
     if(exercice.soaId !== user.soaId){
       throw new NotFoundException('Exercice introuvable pour cet utilisateur');
     }
+    if (exercice.statut === 'CLOTURE') {
+      throw new ForbiddenException('Un exercice clôturé ne peut pas être rouvert');
+    }
 
-    return this.prisma.exercice.update({
+    const updated = await this.prisma.exercice.update({
       where: { id },
       data: updateExerciceDto,
       include: {
         soa: true,
       },
     });
+
+    // Clôture : report automatique des soldes vers l'exercice suivant (R3).
+    let report = null;
+    if (updateExerciceDto.statut === 'CLOTURE') {
+      report = await this.compteMatieresService.reporterSoldes(id);
+    }
+
+    return { exercice: updated, report };
   }
 
   async remove(id: number, userId: number) {

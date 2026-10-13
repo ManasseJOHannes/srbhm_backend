@@ -156,6 +156,72 @@ describe('InventaireService', () => {
     ]);
   });
 
+  it('expose les observations des mouvements de l’exercice courant, distinctes et filtrées par date', async () => {
+    const { service, exercise } = makeService();
+    Reflect.set(exercise, 'mouvements', [
+      {
+        id: 41,
+        exerciceId: 13,
+        articleId: 4,
+        prixUnitaire: new Prisma.Decimal('400000'),
+        quantite: new Prisma.Decimal('5'),
+        type: 'ENTREE',
+        date: new Date('2003-03-15T00:00:00.000Z'),
+        observation: 'Facture achat N°123',
+        article,
+        affectationsSortie: [],
+        lotStockCree: null,
+      },
+      {
+        id: 42,
+        exerciceId: 13,
+        articleId: 4,
+        prixUnitaire: new Prisma.Decimal('400000'),
+        quantite: new Prisma.Decimal('1'),
+        type: 'SORTIE',
+        date: new Date('2003-03-15T00:00:00.000Z'),
+        observation: 'Facture achat N°123',
+        article,
+        affectationsSortie: [],
+        lotStockCree: null,
+      },
+      {
+        id: 43,
+        exerciceId: 13,
+        articleId: 4,
+        prixUnitaire: new Prisma.Decimal('400000'),
+        quantite: new Prisma.Decimal('2'),
+        type: 'ENTREE',
+        date: new Date('2003-06-01T00:00:00.000Z'),
+        observation: '  ',
+        article,
+        affectationsSortie: [],
+        lotStockCree: null,
+      },
+      {
+        id: 44,
+        exerciceId: 13,
+        articleId: 4,
+        prixUnitaire: new Prisma.Decimal('400000'),
+        quantite: new Prisma.Decimal('1'),
+        type: 'ENTREE',
+        date: new Date('2004-01-05T00:00:00.000Z'),
+        observation: 'Facture future à exclure',
+        article,
+        affectationsSortie: [],
+        lotStockCree: null,
+      },
+    ]);
+    const result = await service.obtenir(13, 5, '2003-12-31');
+    expect(result.lignes[0].observationsMouvements).toEqual(['Facture achat N°123']);
+  });
+
+  it('retourne une liste vide quand aucun mouvement ne porte d’observation', async () => {
+    const { service } = makeService();
+    const result = await service.obtenir(13, 5, '2003-12-31');
+    expect(result.lignes[0].observationsMouvements).toEqual([]);
+  });
+
   it('expose la date de référence au format AAAA-MM-JJ', async () => {
     const { service } = makeService();
     const result = await service.obtenir(13, 5, '2003-12-31');

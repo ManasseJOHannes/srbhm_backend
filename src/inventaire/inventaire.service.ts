@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { observationOrigineChaine } from '../observations-stock/observation-stock.helper.js';
+import { normaliserTexteObservation, observationOrigineChaine } from '../observations-stock/observation-stock.helper.js';
 import { SaveInventaireDto } from './dto/save-inventaire.dto.js';
 
 const STOCK_ROLES: Role[] = [
@@ -386,6 +386,14 @@ export class InventaireService {
         const texte = observationOrigineChaine(lotsParId, lot.id);
         if (texte && !observationsLots.includes(texte)) observationsLots.push(texte);
       }
+      // Observations = pièces justificatives des mouvements de l'exercice courant
+      // (mouvements.observation), filtrés par la même date de référence que les
+      // colonnes Entrées/Sorties, dédupliqués, sans emprunt aux autres exercices.
+      const observationsMouvements: string[] = [];
+      for (const mouvement of movementsAtDate) {
+        const texte = normaliserTexteObservation(mouvement.observation);
+        if (texte && !observationsMouvements.includes(texte)) observationsMouvements.push(texte);
+      }
       const theoretical = opening.plus(entries).minus(exits);
       if (!theoretical.equals(lotsAtDateBalance)) {
         line.warnings.add(
@@ -440,6 +448,7 @@ export class InventaireService {
         valeurTheorique: theoretical.mul(line.price).toString(),
         quantiteLots: lotsAtDateBalance.toString(),
         observationsLots,
+        observationsMouvements,
         decomptePhysique: physical?.toString() ?? null,
         ecart: physical ? physical.minus(theoretical).toString() : null,
         observation: saved?.observation ?? null,

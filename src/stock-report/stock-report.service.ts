@@ -214,6 +214,7 @@ async simulerReportStock(soaId: number, userId: number) {
     ecartEntreesDetailsMouvements: Prisma.Decimal | null;
     ecartSortiesDetailsMouvements: Prisma.Decimal | null;
     ecartStockFinalLots: Prisma.Decimal | null;
+    observation: string | null;
     source: string[];
   };
 
@@ -245,7 +246,7 @@ async simulerReportStock(soaId: number, userId: number) {
       articleId: number,
       designation: string,
       prix: Prisma.Decimal,
-    ) => {
+    ): LigneStock => {
       const cle = cleStock(articleId, prix);
       let ligne = lignes.get(cle);
 
@@ -267,6 +268,9 @@ async simulerReportStock(soaId: number, userId: number) {
           ecartEntreesDetailsMouvements: null,
           ecartSortiesDetailsMouvements: null,
           ecartStockFinalLots: null,
+          // Valeur réelle posée par la boucle détails (DetailCompteMatiere
+          // de l'exercice courant) ; null conservé tel quel si absente.
+          observation: null,
           source: [],
         };
 
@@ -356,6 +360,8 @@ async simulerReportStock(soaId: number, userId: number) {
 
       ligne.stockInitialEnregistre =
         ligne.stockInitialEnregistre.plus(detail.existantDebut);
+
+      ligne.observation = detail.observation ?? null;
 
       const cle = cleStock(detail.articleId, prix);
       const flux = fluxDetails.get(cle) ?? {
@@ -555,6 +561,7 @@ async simulerReportStock(soaId: number, userId: number) {
           .minus(ligne.stockInitialCalcule)
           .toString(),
         stockNegatif: ligne.stockFinal.lessThan(0),
+        observation: ligne.observation,
         source: ligne.source,
       })),
     })),

@@ -23,10 +23,8 @@ describe('ExercicesService SOA access control', () => {
         findUnique: vi.fn().mockResolvedValue({
           ...created,
           soa: { id: 12 },
-          compteMatiere: { id: 90, details: [] },
         }),
       },
-      compteMatiere: { create: vi.fn().mockResolvedValue({ id: 90 }) },
     };
     const prisma = {
       user: { findUnique: vi.fn().mockResolvedValue({ id: 4, soaId: 12, role: 'DEPOSITEUR_COMPTABLE' }) },
@@ -34,33 +32,30 @@ describe('ExercicesService SOA access control', () => {
       exercice: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn((callback: (transaction: typeof tx) => unknown) => callback(tx)),
     };
-    const mouvementService = {
-      reporterStockDepuisExercicePrecedent: vi.fn().mockResolvedValue({ reporte: false }),
-    };
     return {
-      service: new ExercicesService(prisma as never, mouvementService as never),
+      service: new ExercicesService(prisma as never),
       prisma,
       tx,
-      mouvementService,
     };
   };
 
-  it('crée le Compte Matière et lance le report dans la transaction de création', async () => {
-    const { service, prisma, tx, mouvementService } = makeCreateService();
+  it('crée un exercice nu (sans compte matière ni report) dans la transaction de création', async () => {
+    const { service, prisma, tx } = makeCreateService();
 
     await expect(service.create({ annee: 2025 }, 4)).resolves.toMatchObject({
       id: 30,
-      compteMatiere: { id: 90 },
+      soa: { id: 12 },
     });
 
-    expect(tx.compteMatiere.create).toHaveBeenCalledWith({
-      data: { exerciceId: 30 },
+    expect(tx.exercice.create).toHaveBeenCalledWith({
+      data: {
+        annee: 2025,
+        dateDebut: expect.any(Date),
+        dateFin: expect.any(Date),
+        soaId: 12,
+        statut: 'EN_COURS',
+      },
     });
-    expect(mouvementService.reporterStockDepuisExercicePrecedent).toHaveBeenCalledWith(
-      30,
-      4,
-      tx,
-    );
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 

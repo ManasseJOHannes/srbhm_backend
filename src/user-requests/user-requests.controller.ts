@@ -54,11 +54,11 @@ export class UserRequestsController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.ADMIN)
   reject(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() rejectUserRequestDto: RejectUserRequestDto,
   ) {
     return this.userRequestsService.reject(
-      Number(id),
+      id,
       rejectUserRequestDto,
     );
   }
@@ -66,7 +66,7 @@ export class UserRequestsController {
   @Get(":id")
   @UseGuards(AuthGuard("jwt"), RolesGuard)
   @Roles(Role.ADMIN)
-  findOne(@Param("id") id:string){
-    return this.userRequestsService.findOne(Number(id));
+  findOne(@Param("id", ParseIntPipe) id:number){
+    return this.userRequestsService.findOne(id);
   }
 }

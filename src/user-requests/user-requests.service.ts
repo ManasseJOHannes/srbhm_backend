@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { CreateUserRequestDto } from './dto/create-user-request.dto.js';
-import { UpdateUserRequestDto } from './dto/update-user-request.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RequestStatus } from '@prisma/client';
 import { RejectUserRequestDto } from './dto/reject-user-request.dto.js';
@@ -269,16 +268,5 @@ export class UserRequestsService {
       throw new NotFoundException("Demande introuvable");
     }
     return request;
-  }
-
-  update(id: number, updateUserRequestDto: UpdateUserRequestDto) {
-    return this.prisma.userRequest.update({
-      where: { id },
-      data: updateUserRequestDto,
-    });
-  }
-
-  remove(id: number) {
-    return this.prisma.userRequest.delete({ where: { id } });
   }
 }

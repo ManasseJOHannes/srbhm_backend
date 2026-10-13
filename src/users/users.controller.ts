@@ -34,6 +34,7 @@ export class UsersController {
     );
   }
 
+  @Roles(Role.ADMIN)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(Number(id));

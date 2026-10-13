@@ -24,14 +24,14 @@ export class ExercicesController {
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
   @Get()
   findAll(@Req() req: any) {
     return this.exercicesService.findAll(req.user.id);
   }
   
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.exercicesService.findOne(+id, req.user.id);

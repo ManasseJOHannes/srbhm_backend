@@ -7,13 +7,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateExerciceDto } from './dto/update-exercice.dto.js';
 import { CreateExerciceDto} from './dto/create-exercice.dto.js';
-import { MouvementService } from '../mouvement/mouvement.service.js';
 
 @Injectable()
 export class ExercicesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mouvementService: MouvementService,
   ) {}
 
 async create(
@@ -81,20 +79,10 @@ async create(
       },
     });
 
-    await tx.compteMatiere.create({
-      data: { exerciceId: exercice.id },
-    });
-    await this.mouvementService.reporterStockDepuisExercicePrecedent(
-      exercice.id,
-      userId,
-      tx,
-    );
-
     return tx.exercice.findUnique({
       where: { id: exercice.id },
       include: {
         soa: true,
-        compteMatiere: { include: { details: true } },
       },
     });
   });
@@ -213,6 +201,9 @@ async create(
     }
     if (exercice.soaId !== user.soaId) {
       throw new NotFoundException('Exercice introuvable pour cet utilisateur');
+    }
+    if (exercice.statut === 'CLOTURE') {
+      throw new ForbiddenException('Un exercice clôturé ne peut pas être supprimé');
     }
 
     return this.prisma.exercice.delete({

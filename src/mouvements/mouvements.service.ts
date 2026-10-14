@@ -95,6 +95,8 @@ export class MouvementsService {
           data: { sorties: sortiesCumulees },
         });
       } else {
+        // Folio partageable (page du grand livre) : la dernière saisie
+        // fait foi, sans contrôle d'unicité.
         if (!detail) {
           detail = await tx.detailCompteMatiere.create({
             data: {
@@ -102,7 +104,16 @@ export class MouvementsService {
               articleId: dto.articleId,
               prixUnitaire: dto.prixUnitaire,
               existantDebut: 0,
+              folioGrandLivre: dto.folioGrandLivre,
             },
+          });
+        } else if (
+          dto.folioGrandLivre !== undefined &&
+          dto.folioGrandLivre !== detail.folioGrandLivre
+        ) {
+          await tx.detailCompteMatiere.update({
+            where: { id: detail.id },
+            data: { folioGrandLivre: dto.folioGrandLivre },
           });
         }
         await tx.detailCompteMatiere.update({

@@ -28,6 +28,7 @@ function makeService(overrides: Record<string, unknown> = {}) {
     },
     detailCompteMatiere: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       create: vi
         .fn()
@@ -55,6 +56,7 @@ function makeService2(txDetail: Record<string, unknown>) {
     },
     detailCompteMatiere: {
       findUnique: vi.fn().mockResolvedValue(txDetail),
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
       update: vi.fn().mockImplementation(({ data }: any) => Promise.resolve(data)),
@@ -150,5 +152,33 @@ describe('MouvementsService regles de gestion', () => {
       },
     });
     await expect(service.create(dto, 4)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("pose le folio à l'entrée sur détail sans folio", async () => {
+    const { service, tx } = makeService();
+    vi.mocked(tx.detailCompteMatiere.findUnique).mockResolvedValue({
+      id: 7, existantDebut: 0, entrees: 0, sorties: 0, folioGrandLivre: null,
+    } as never);
+    await service.create({ ...dto, folioGrandLivre: 12 }, 4);
+    expect(tx.detailCompteMatiere.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({ folioGrandLivre: 12 }),
+      }),
+    );
+  });
+
+  it("écrase le folio existant : dernière saisie fait foi", async () => {
+    const { service, tx } = makeService();
+    vi.mocked(tx.detailCompteMatiere.findUnique).mockResolvedValue({
+      id: 7, existantDebut: 0, entrees: 0, sorties: 0, folioGrandLivre: 5,
+    } as never);
+    await service.create({ ...dto, folioGrandLivre: 12 }, 4);
+    expect(tx.detailCompteMatiere.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({ folioGrandLivre: 12 }),
+      }),
+    );
   });
 });

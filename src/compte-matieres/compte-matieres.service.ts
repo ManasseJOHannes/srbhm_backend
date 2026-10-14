@@ -195,38 +195,6 @@ export class CompteMatieresService {
         'Un détail existe déjà pour cet article et ce prix',
       );
     }
-    // R4 : folio et observation uniques par détail au sein du compte.
-    if (dto.folioGrandLivre !== undefined) {
-      const folioPris = await this.prisma.detailCompteMatiere.findUnique({
-        where: {
-          compteMatiereId_folioGrandLivre: {
-            compteMatiereId: compte.id,
-            folioGrandLivre: dto.folioGrandLivre,
-          },
-        },
-      });
-      if (folioPris) {
-        throw new ConflictException(
-          `Le folio ${dto.folioGrandLivre} est déjà utilisé dans ce compte`,
-        );
-      }
-    }
-    if (dto.observation) {
-      const observationPrise =
-        await this.prisma.detailCompteMatiere.findUnique({
-          where: {
-            compteMatiereId_observation: {
-              compteMatiereId: compte.id,
-              observation: dto.observation.trim(),
-            },
-          },
-        });
-      if (observationPrise) {
-        throw new ConflictException(
-          'Cette observation est déjà utilisée dans ce compte',
-        );
-      }
-    }
     const detail = await this.prisma.detailCompteMatiere.create({
       data: {
         compteMatiereId: compte.id,

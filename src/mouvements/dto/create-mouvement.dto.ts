@@ -27,4 +27,14 @@ export class CreateMouvementDto {
   @IsOptional()
   @IsString()
   observation?: string;
+
+  /**
+   * Entrée uniquement : numéro du folio du grand livre à poser sur le
+   * détail (créé ou sans folio). En sortie, le folio reste celui de la
+   * ligne source (lecture seule côté front, ignoré ici).
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  folioGrandLivre?: number;
 }

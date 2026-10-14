@@ -131,8 +131,6 @@ model DetailCompteMatiere {
   compteMatiere   CompteMatiere @relation(fields: [compteMatiereId], references: [id])
 
   @@unique([compteMatiereId, articleId, prixUnitaire])
-  @@unique([compteMatiereId, folioGrandLivre])
-  @@unique([compteMatiereId, observation])
   @@index([compteMatiereId])
   @@index([articleId])
 }

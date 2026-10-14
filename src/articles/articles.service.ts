@@ -17,7 +17,7 @@ export class ArticlesService {
     return this.prisma.article.create({
       data: {
         designation: createArticleDto.designation,
-        unite: createArticleDto.unite,
+        unite: createArticleDto.unite.trim().toLowerCase(),
         nomenclatureId: createArticleDto.nomenclatureId,
       },
       include: { nomenclature: true },
@@ -57,7 +57,12 @@ export class ArticlesService {
     }
     return this.prisma.article.update({
       where: { id },
-      data: updateArticleDto,
+      data: {
+        ...updateArticleDto,
+        ...(updateArticleDto.unite
+          ? { unite: updateArticleDto.unite.trim().toLowerCase() }
+          : {}),
+      },
       include: { nomenclature: true },
     });
   }

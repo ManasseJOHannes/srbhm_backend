@@ -115,16 +115,13 @@ describe('CompteMatieresService règles de gestion', () => {
     await expect(service.remove(9, 4)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('reporte les soldes vers N+1 sans écraser (R3 idempotent)', async () => {
+  it('reporte les restes N-1 en existant de N avec folio et observation', async () => {
     const source = {
-      id: 5,
-      annee: 2025,
-      soaId: 12,
-      statut: 'CLOTURE',
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
       compteMatiere: {
         details: [
-          { articleId: 3, prixUnitaire: 100, folioGrandLivre: 12, observation: 'Facture N°200', existantDebut: 10, entrees: 4, sorties: 2 },
-          { articleId: 4, prixUnitaire: 50, folioGrandLivre: null, observation: null, existantDebut: 0, entrees: 0, sorties: 0 },
+          { articleId: 3, prixUnitaire: 100, folioGrandLivre: 12, observation: 'Facture N°200', existantDebut: 10, entrees: 4, sorties: 2, article: { designation: 'Chaise' } },
+          { articleId: 4, prixUnitaire: 50, folioGrandLivre: null, observation: null, existantDebut: 0, entrees: 0, sorties: 0, article: { designation: 'Table' } },
         ],
       },
     };
@@ -145,13 +142,13 @@ describe('CompteMatieresService règles de gestion', () => {
         findUnique: vi
           .fn()
           .mockResolvedValueOnce(source)
-          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12 }),
+          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12, statut: 'EN_COURS' }),
       },
       $transaction: vi.fn((callback: (t: unknown) => unknown) => callback(tx)),
     };
     const { service } = makeService(prisma as unknown as Record<string, unknown>);
     const bilan = await service.reporterSoldes(5);
-    // reste = 10 + 4 - 2 = 12 > 0 → reporté avec folio + observation ; 0 ignoré
+    // reste = 10 + 4 - 2 = 12 > 0 → recopié ; 0 ignoré
     expect(bilan).toMatchObject({ reporte: true, reportes: 1, ignores: 1 });
     expect(tx.detailCompteMatiere.create).toHaveBeenCalledTimes(1);
     expect(tx.detailCompteMatiere.create).toHaveBeenCalledWith(
@@ -166,28 +163,63 @@ describe('CompteMatieresService règles de gestion', () => {
     );
   });
 
-  it('signale les détails déjà présents au lieu de les écraser', async () => {
+  it('génère une observation unique avec désignation si absente', async () => {
     const source = {
-      id: 5,
-      annee: 2025,
-      soaId: 12,
-      statut: 'CLOTURE',
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
       compteMatiere: {
         details: [
-          { articleId: 3, prixUnitaire: 100, folioGrandLivre: 7, observation: null, existantDebut: 8, entrees: 0, sorties: 0 },
+          { articleId: 3, prixUnitaire: 100, folioGrandLivre: null, observation: null, existantDebut: 5, entrees: 0, sorties: 0, article: { designation: 'Chaise' } },
+        ],
+      },
+    };
+    const tx = {
+      compteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 10 }),
+        update: vi.fn().mockResolvedValue({ id: 10 }),
+      },
+      detailCompteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({ id: 8 }),
+      },
+    };
+    const prisma = {
+      exercice: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(source)
+          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12, statut: 'EN_COURS' }),
+      },
+      $transaction: vi.fn((callback: (t: unknown) => unknown) => callback(tx)),
+    };
+    const { service } = makeService(prisma as unknown as Record<string, unknown>);
+    await service.reporterSoldes(5);
+    expect(tx.detailCompteMatiere.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          observation: "Stock reporté de l'exercice 2025 — Chaise",
+        }),
+      }),
+    );
+  });
+
+  it('signale les détails déjà présents au lieu de les écraser', async () => {
+    const source = {
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
+      compteMatiere: {
+        details: [
+          { articleId: 3, prixUnitaire: 100, folioGrandLivre: 7, observation: null, existantDebut: 8, entrees: 0, sorties: 0, article: { designation: 'Chaise' } },
         ],
       },
     };
     const tx = {
       compteMatiere: {
         findUnique: vi.fn().mockResolvedValue({ id: 10 }),
-        create: vi.fn(),
         update: vi.fn().mockResolvedValue({ id: 10 }),
       },
       detailCompteMatiere: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValue({ id: 8, existantDebut: 5 }),
+        findUnique: vi.fn().mockResolvedValue({ id: 8, existantDebut: 5 }),
         findMany: vi.fn().mockResolvedValue([]),
         create: vi.fn(),
       },
@@ -197,7 +229,7 @@ describe('CompteMatieresService règles de gestion', () => {
         findUnique: vi
           .fn()
           .mockResolvedValueOnce(source)
-          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12 }),
+          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12, statut: 'EN_COURS' }),
       },
       $transaction: vi.fn((callback: (t: unknown) => unknown) => callback(tx)),
     };
@@ -206,69 +238,15 @@ describe('CompteMatieresService règles de gestion', () => {
     expect(bilan).toMatchObject({
       reporte: true,
       reportes: 0,
-      conflits: [
-        {
-          articleId: 3,
-          prixUnitaire: 100,
-          existantEnregistre: 5,
-          quantiteReportee: 8,
-        },
-      ],
+      conflits: [{ articleId: 3, prixUnitaire: 100, existantEnregistre: 5, quantiteReportee: 8 }],
     });
     expect(tx.detailCompteMatiere.create).not.toHaveBeenCalled();
   });
 
-  it('reporte depuis le dernier clôturé même avec un trou (N → N+k)', async () => {    const prisma = {
-      exercice: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValue({ id: 7, annee: 2027, soaId: 12 }),
-        findFirst: vi.fn().mockResolvedValue({
-          id: 5,
-          annee: 2025,
-          soaId: 12,
-          statut: 'CLOTURE',
-          compteMatiere: { details: [] },
-        }),
-      },
-      compteMatiere: {
-        findUnique: vi.fn().mockResolvedValue({ id: 11 }),
-        update: vi.fn().mockResolvedValue({ id: 11 }),
-      },
-      detailCompteMatiere: { findMany: vi.fn().mockResolvedValue([]) },
-      $transaction: vi.fn((callback: (t: unknown) => unknown) =>
-        callback({
-          compteMatiere: {
-            findUnique: vi.fn().mockResolvedValue({ id: 11 }),
-            update: vi.fn().mockResolvedValue({ id: 11 }),
-          },
-          detailCompteMatiere: {
-            findUnique: vi.fn(),
-            findMany: vi.fn().mockResolvedValue([]),
-          },
-        }),
-      ),
-    };
-    const { service } = makeService(prisma as unknown as Record<string, unknown>);
-    const bilan = await service.reporterDepuisDernierCloture(12, 2027);
-    expect(bilan).toMatchObject({
-      reporte: true,
-      exerciceSource: 2025,
-      exerciceCible: 2027,
-    });
-  });
-
-  it("n'écrit jamais sur un exercice cible clôturé (R3)", async () => {
+  it("n'écrit jamais sur un exercice cible clôturé", async () => {
     const source = {
-      id: 5,
-      annee: 2025,
-      soaId: 12,
-      statut: 'CLOTURE',
-      compteMatiere: {
-        details: [
-          { articleId: 3, prixUnitaire: 100, folioGrandLivre: 12, observation: null, existantDebut: 10, entrees: 0, sorties: 0 },
-        ],
-      },
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
+      compteMatiere: { details: [] },
     };
     const prisma = {
       exercice: {
@@ -281,10 +259,7 @@ describe('CompteMatieresService règles de gestion', () => {
     };
     const { service } = makeService(prisma as unknown as Record<string, unknown>);
     const bilan = await service.reporterSoldes(5);
-    expect(bilan).toMatchObject({
-      reporte: false,
-      raison: 'EXERCICE_SUIVANT_CLOTURE',
-    });
+    expect(bilan).toMatchObject({ reporte: false, raison: 'EXERCICE_SUIVANT_CLOTURE' });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

@@ -47,8 +47,31 @@ function makeService(overrides: Record<string, unknown> = {}) {
   return { service: new MouvementsService(prisma as never), prisma, tx };
 }
 
-describe('MouvementsService règles de gestion', () => {
-  it("refuse toute écriture sur exercice clôturé (R3)", async () => {
+function makeService2(txDetail: Record<string, unknown>) {
+  const tx2 = {
+    compteMatiere: {
+      findUnique: vi.fn().mockResolvedValue({ id: 9 }),
+      update: vi.fn().mockResolvedValue({ id: 9 }),
+    },
+    detailCompteMatiere: {
+      findUnique: vi.fn().mockResolvedValue(txDetail),
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
+      update: vi.fn().mockImplementation(({ data }: any) => Promise.resolve(data)),
+    },
+    mouvement: { create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 11, ...data })) },
+  };
+  const prisma2 = {
+    user: { findUnique: vi.fn().mockResolvedValue({ id: 4, ...depositaire }) },
+    exercice: { findUnique: vi.fn().mockResolvedValue(exercice) },
+    article: { findUnique: vi.fn().mockResolvedValue({ id: 3 }) },
+    $transaction: vi.fn((cb: (t: unknown) => unknown) => cb(tx2)),
+  };
+  return { service2: new MouvementsService(prisma2 as never), tx2 };
+}
+
+describe('MouvementsService regles de gestion', () => {
+  it('refuse toute ecriture sur exercice cloture (R3)', async () => {
     const { service } = makeService({
       exercice: {
         findUnique: vi.fn().mockResolvedValue({ ...exercice, statut: 'CLOTURE' }),
@@ -57,44 +80,54 @@ describe('MouvementsService règles de gestion', () => {
     await expect(service.create(dto, 4)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it("refuse une date hors exercice (R4)", async () => {
+  it('refuse une date hors exercice (R4)', async () => {
     const { service } = makeService();
     await expect(
       service.create({ ...dto, date: '2024-06-15' }, 4),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("refuse une sortie sans stock suffisant (R2)", async () => {
-    const txDetail = { id: 7, existantDebut: 2, entrees: 0, sorties: 0 };
+  it('refuse une sortie sans detail sur exercice courant', async () => {
     const { service } = makeService();
-    // réécrit le mock tx via overrides internes : on rejoue avec détail existant
-    const tx2 = {
-      compteMatiere: {
-        findUnique: vi.fn().mockResolvedValue({ id: 9 }),
-        update: vi.fn(),
-      },
-      detailCompteMatiere: {
-        findUnique: vi.fn().mockResolvedValue(txDetail),
-        findMany: vi.fn().mockResolvedValue([]),
-        create: vi.fn(),
-        update: vi.fn(),
-      },
-      mouvement: { create: vi.fn() },
-    };
-    const prisma2 = {
-      user: { findUnique: vi.fn().mockResolvedValue({ id: 4, ...depositaire }) },
-      exercice: { findUnique: vi.fn().mockResolvedValue(exercice) },
-      article: { findUnique: vi.fn().mockResolvedValue({ id: 3 }) },
-      $transaction: vi.fn((cb: (t: unknown) => unknown) => cb(tx2)),
-    };
-    const service2 = new MouvementsService(prisma2 as never);
+    await expect(
+      service.create({ ...dto, type: 'SORTIE' as const }, 4),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuse une sortie qui depasserait existant, en cumul (R2)', async () => {
+    // existant 20, deja 16 sortis : 16 + 5 = 21 > 20 -> refuse.
+    const { service2, tx2 } = makeService2({
+      id: 7,
+      existantDebut: 20,
+      entrees: 0,
+      sorties: 16,
+    });
     await expect(
       service2.create({ ...dto, type: 'SORTIE' as const, quantite: 5 }, 4),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(service).toBeDefined();
+    expect(tx2.detailCompteMatiere.update).not.toHaveBeenCalled();
+    expect(tx2.mouvement.create).not.toHaveBeenCalled();
   });
 
-  it("crée le mouvement + met à jour le détail et les valeurs (R2)", async () => {
+  it('accepte une sortie dans la limite de existant (R2)', async () => {
+    // existant 20, deja 16 sortis : 16 + 4 = 20 <= 20 -> accepte.
+    const { service2, tx2 } = makeService2({
+      id: 7,
+      existantDebut: 20,
+      entrees: 0,
+      sorties: 16,
+    });
+    const mouvement = await service2.create(
+      { ...dto, type: 'SORTIE' as const, quantite: 4 },
+      4,
+    );
+    expect(mouvement).toMatchObject({ type: 'SORTIE', quantite: 4 });
+    expect(tx2.detailCompteMatiere.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { sorties: 20 } }),
+    );
+  });
+
+  it('cree le mouvement + met a jour le detail et les valeurs (R2)', async () => {
     const { service, tx } = makeService();
     vi.mocked(tx.detailCompteMatiere.findMany).mockResolvedValue([
       { existantDebut: 0, entrees: 10, sorties: 0, prixUnitaire: 100 },

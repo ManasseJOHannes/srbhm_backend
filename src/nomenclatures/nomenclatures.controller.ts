@@ -12,7 +12,7 @@ import { NomenclaturesService } from './nomenclatures.service.js';
 export class NomenclaturesController {
   constructor(private readonly nomenclaturesService: NomenclaturesService) {}
 
-  @Roles(Role.DEPOSITEUR_COMPTABLE)
+  @Roles(Role.COMPTABLE)
   @Post()
   create(@Body() createNomenclatureDto: CreateNomenclatureDto) {
     return this.nomenclaturesService.create(createNomenclatureDto);
@@ -30,7 +30,7 @@ export class NomenclaturesController {
     return this.nomenclaturesService.findOne(id);
   }
 
-  @Roles(Role.DEPOSITEUR_COMPTABLE)
+  @Roles(Role.COMPTABLE)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -39,7 +39,7 @@ export class NomenclaturesController {
     return this.nomenclaturesService.update(id, updateNomenclatureDto);
   }
 
-  @Roles(Role.DEPOSITEUR_COMPTABLE)
+  @Roles(Role.COMPTABLE)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.nomenclaturesService.remove(id);

@@ -131,23 +131,25 @@ model DetailCompteMatiere {
   compteMatiere   CompteMatiere @relation(fields: [compteMatiereId], references: [id])
 
   @@unique([compteMatiereId, articleId, prixUnitaire])
+  @@unique([compteMatiereId, folioGrandLivre])
+  @@unique([compteMatiereId, observation])
   @@index([compteMatiereId])
   @@index([articleId])
 }
 
 model Mouvement {
-  id           Int           @id @default(autoincrement())
-  type         TypeMouvement
-  date         DateTime
-  exerciceId   Int
-  articleId    Int
-  quantite     Decimal
-  prixUnitaire Decimal
-  observation  String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  article      Article       @relation(fields: [articleId], references: [id])
-  exercice     Exercice      @relation(fields: [exerciceId], references: [id])
+  id                   Int           @id @default(autoincrement())
+  type                 TypeMouvement
+  date                 DateTime
+  exerciceId           Int
+  articleId            Int
+  quantite             Decimal
+  prixUnitaire         Decimal
+  observation          String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  article              Article       @relation(fields: [articleId], references: [id])
+  exercice             Exercice      @relation(fields: [exerciceId], references: [id])
 
   @@index([exerciceId])
   @@index([articleId])

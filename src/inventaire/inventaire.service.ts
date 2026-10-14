@@ -36,7 +36,15 @@ export class InventaireService {
             details: { include: { article: { include: { nomenclature: true } } } },
           },
         },
-        mouvements: true,
+        mouvements: {
+          select: {
+            articleId: true,
+            prixUnitaire: true,
+            quantite: true,
+            type: true,
+            observation: true,
+          },
+        },
         inventaire: { include: { lignes: true } },
       },
     });
@@ -47,18 +55,36 @@ export class InventaireService {
     ) {
       throw new NotFoundException('Exercice introuvable pour cet utilisateur');
     }
-    return exercice;
+    return { exercice, user };
   }
 
+  /**
+   * Inventaire de l'exercice N seul : son compte contient déjà les
+   * articles des exercices avant (restes N-1 reportés en existant de N).
+   * R2 stricte : sorties cumulées ≤ existant de début, donc
+   * reste = existant + entrees − sorties ne peut pas devenir négatif.
+   */
   async obtenir(exerciceId: number, userId: number) {
-    const exercice = await this.chargerExercice(exerciceId, userId);
-    const lignesEnregistrees = new Map(
-      (exercice.inventaire?.lignes ?? []).map((ligne) => [
-        `${ligne.articleId}:${Number(ligne.prixUnitaire).toFixed(2)}`,
-        ligne,
-      ]),
-    );
-    // Observations des mouvements regroupées par article × prix (R7).
+    const { exercice } = await this.chargerExercice(exerciceId, userId);
+    const lignes: {
+      articleId: number;
+      designation: string;
+      unite: string;
+      nomenclatureCode: string;
+      nomenclatureLibelle: string;
+      folioGrandLivre: number | null;
+      prixUnitaire: unknown;
+      existantDebut: unknown;
+      entrees: unknown;
+      sorties: unknown;
+      resteTheorique: number;
+      valeurTheorique: number;
+      decomptePhysique: unknown;
+      ecart: number | null;
+      observations: string[];
+      avertissements: string[];
+    }[] = [];
+    // Observations des mouvements de l'exercice, par article × prix (R7).
     const observationsMouvements = new Map<string, string[]>();
     for (const mouvement of exercice.mouvements ?? []) {
       const texte = (mouvement.observation ?? '').trim();
@@ -68,12 +94,32 @@ export class InventaireService {
       if (!liste.includes(texte)) liste.push(texte);
       observationsMouvements.set(cle, liste);
     }
-    const lignes = (exercice.compteMatiere?.details ?? []).map((detail) => {
+    const lignesEnregistrees = new Map(
+      (exercice.inventaire?.lignes ?? []).map((ligne) => [
+        `${ligne.articleId}:${Number(ligne.prixUnitaire).toFixed(2)}`,
+        ligne,
+      ]),
+    );
+    const avertissements: string[] = [];
+    // Flux équilibrés : sorties datées de N sur les détails de N.
+    // R2 stricte : sorties cumulées ≤ existant de début, donc le reste
+    // reste = existant + entrees − sorties ne peut pas devenir négatif.
+    const sortiesAnnee = new Map<string, number>();
+    for (const mouvement of exercice.mouvements ?? []) {
+      if (mouvement.type !== 'SORTIE') continue;
+      const cle = `${mouvement.articleId}:${Number(mouvement.prixUnitaire).toFixed(2)}`;
+      sortiesAnnee.set(
+        cle,
+        (sortiesAnnee.get(cle) ?? 0) + Number(mouvement.quantite),
+      );
+    }
+    for (const detail of exercice.compteMatiere?.details ?? []) {
+      const cle = `${detail.articleId}:${Number(detail.prixUnitaire).toFixed(2)}`;
+      const sorties = sortiesAnnee.get(cle) ?? 0;
       const theorique =
         Number(detail.existantDebut) +
         Number(detail.entrees) -
-        Number(detail.sorties);
-      const cle = `${detail.articleId}:${Number(detail.prixUnitaire).toFixed(2)}`;
+        sorties;
       const physique = lignesEnregistrees.get(cle)?.quantitePhysique;
       const ecart =
         physique === undefined ? null : Number(physique) - theorique;
@@ -81,7 +127,14 @@ export class InventaireService {
         ...(detail.observation?.trim() ? [detail.observation.trim()] : []),
         ...(observationsMouvements.get(cle) ?? []),
       ];
-      return {
+      const ligneAvertissements =
+        ecart !== null && ecart !== 0
+          ? [`Écart de ${ecart} entre le décompte physique et le stock théorique`]
+          : [];
+      for (const message of ligneAvertissements) {
+        avertissements.push(`${detail.article.designation} : ${message}`);
+      }
+      lignes.push({
         articleId: detail.articleId,
         designation: detail.article.designation,
         unite: detail.article.unite,
@@ -91,28 +144,20 @@ export class InventaireService {
         prixUnitaire: detail.prixUnitaire,
         existantDebut: detail.existantDebut,
         entrees: detail.entrees,
-        sorties: detail.sorties,
+        sorties,
         resteTheorique: theorique,
         valeurTheorique: theorique * Number(detail.prixUnitaire),
         decomptePhysique: physique ?? null,
         ecart,
         observations,
-        avertissements:
-          ecart !== null && ecart !== 0
-            ? [`Écart de ${ecart} entre le décompte physique et le stock théorique`]
-            : [],
-      };
-    });
+        avertissements: ligneAvertissements,
+      });
+    }
     lignes.sort(
       (a, b) =>
         a.nomenclatureCode.localeCompare(b.nomenclatureCode) ||
         a.designation.localeCompare(b.designation) ||
         Number(a.prixUnitaire) - Number(b.prixUnitaire),
-    );
-    const avertissements = lignes.flatMap((ligne) =>
-      ligne.avertissements.map(
-        (message) => `${ligne.designation} : ${message}`,
-      ),
     );
     return {
       inventaireId: exercice.inventaire?.id ?? null,
@@ -133,7 +178,7 @@ export class InventaireService {
   }
 
   async enregistrer(exerciceId: number, userId: number, dto: SaveInventaireDto) {
-    const exercice = await this.chargerExercice(exerciceId, userId);
+    const { exercice } = await this.chargerExercice(exerciceId, userId);
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },

@@ -14,6 +14,9 @@ describe('ExercicesService SOA access control', () => {
     };
     const compteMatieresService = {
       reporterSoldes: vi.fn().mockResolvedValue({ reporte: false }),
+      reporterDepuisDernierCloture: vi
+        .fn()
+        .mockResolvedValue({ reporte: false, raison: 'AUCUN_CLOTURE_ANTERIEUR' }),
     };
     return {
       service: new ExercicesService(prisma as never, compteMatieresService as never),
@@ -39,25 +42,19 @@ describe('ExercicesService SOA access control', () => {
       exercice: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn((callback: (transaction: typeof tx) => unknown) => callback(tx)),
     };
-    const compteMatieresService = {
-      reporterSoldes: vi.fn(),
-      reporterDepuisDernierCloture: vi
-        .fn()
-        .mockResolvedValue({ reporte: false, raison: 'AUCUN_CLOTURE_ANTERIEUR' }),
-    };
     return {
-      service: new ExercicesService(prisma as never, compteMatieresService as never),
+      service: new ExercicesService(prisma as never, {} as never),
       prisma,
       tx,
-      compteMatieresService,
     };
   };
 
   it('crée un exercice nu (sans compte matière ni report) dans la transaction de création', async () => {
-    const { service, prisma, tx, compteMatieresService } = makeCreateService();
+    const { service, prisma, tx } = makeCreateService();
 
     await expect(service.create({ annee: 2025 }, 4)).resolves.toMatchObject({
-      exercice: { id: 30, soa: { id: 12 } },
+      id: 30,
+      soa: { id: 12 },
     });
 
     expect(tx.exercice.create).toHaveBeenCalledWith({
@@ -70,9 +67,6 @@ describe('ExercicesService SOA access control', () => {
       },
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(
-      compteMatieresService.reporterDepuisDernierCloture,
-    ).toHaveBeenCalledWith(12, 2025);
   });
 
   it('ne crée pas un exercice déjà présent pour le SOA', async () => {
@@ -99,7 +93,7 @@ describe('ExercicesService SOA access control', () => {
     const own = makeService(12);
     await expect(
       own.service.update(21, { statut: 'CLOTURE' } as never, 4),
-    ).resolves.toMatchObject({ exercice: { statut: 'CLOTURE' } });
+    ).resolves.toMatchObject({ statut: 'CLOTURE' });
 
     const foreign = makeService(99);
     await expect(
@@ -126,17 +120,8 @@ describe('ExercicesService SOA access control', () => {
     expect(prisma.exercice.update).not.toHaveBeenCalled();
   });
 
-  it('reporte les soldes vers N+1 à la clôture (R3)', async () => {
-    const { service, compteMatieresService } = makeService(12);
-
-    await expect(
-      service.update(21, { statut: 'CLOTURE' } as never, 4),
-    ).resolves.toMatchObject({ exercice: { statut: 'CLOTURE' } });
-    expect(compteMatieresService.reporterSoldes).toHaveBeenCalledWith(21);
-  });
-
   it('refuse de rouvrir un exercice clôturé (R3 irréversible)', async () => {
-    const { service, prisma, compteMatieresService } = makeService(12);
+    const { service, prisma } = makeService(12);
     vi.mocked(prisma.exercice.findUnique).mockResolvedValue({
       ...exercise,
       statut: 'CLOTURE',
@@ -146,6 +131,13 @@ describe('ExercicesService SOA access control', () => {
       service.update(21, { statut: 'EN_COURS' } as never, 4),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.exercice.update).not.toHaveBeenCalled();
-    expect(compteMatieresService.reporterSoldes).not.toHaveBeenCalled();
+  });
+
+  it('reporte les restes vers N+1 à la clôture', async () => {
+    const { service, compteMatieresService } = makeService(12);
+    await expect(
+      service.update(21, { statut: 'CLOTURE' } as never, 4),
+    ).resolves.toMatchObject({ statut: 'CLOTURE' });
+    expect(compteMatieresService.reporterSoldes).toHaveBeenCalledWith(21);
   });
 });

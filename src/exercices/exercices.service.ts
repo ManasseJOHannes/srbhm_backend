@@ -89,15 +89,19 @@ async create(
     });
   });
 
-  // Report différé : depuis le dernier exercice clôturé antérieur
-  // (remonte la chaîne si N+1 inexistant ou non clôturé).
-  const report =
+  // Les restes de N-1 deviennent l'existant de N : report définitif
+  // depuis le dernier exercice clôturé antérieur, s'il existe.
+  const precedent = await this.prisma.exercice.findUnique({
+    where: { soaId_annee: { soaId, annee: annee - 1 } },
+  });
+  if (precedent && precedent.statut === 'CLOTURE') {
     await this.compteMatieresService.reporterDepuisDernierCloture(
       soaId,
       annee,
     );
+  }
 
-  return { exercice: created, report };
+  return created;
 }
 
   async findAll(userId: number) {
@@ -192,13 +196,12 @@ async create(
       },
     });
 
-    // Clôture : report automatique des soldes vers l'exercice suivant (R3).
-    let report = null;
+    // Clôture : les restes au 31 décembre deviennent l'existant de N+1.
     if (updateExerciceDto.statut === 'CLOTURE') {
-      report = await this.compteMatieresService.reporterSoldes(id);
+      await this.compteMatieresService.reporterSoldes(id);
     }
 
-    return { exercice: updated, report };
+    return updated;
   }
 
   async remove(id: number, userId: number) {

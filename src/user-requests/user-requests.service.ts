@@ -1,13 +1,17 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { CreateUserRequestDto } from './dto/create-user-request.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { RequestStatus } from '@prisma/client';
 import { RejectUserRequestDto } from './dto/reject-user-request.dto.js';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
   private generateTemporaryPassword(): string {
     const randomNumber = Math.floor(1000 + Math.random() * 9000);
 
@@ -243,6 +247,14 @@ export class UserRequestsService {
       include: {
         soa: true,
       },
+    }).then((created) => {
+      // Notification admin par email, en tâche de fond : ne bloque jamais la réponse.
+      this.mailService
+        .sendNewUserRequestNotification(created)
+        .catch((err) =>
+          console.warn('[UserRequests] Notification email échouée :', err),
+        );
+      return created;
     });
   }
 

@@ -1,20 +1,17 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { UserRequestsController } from './user-requests.controller.js';
 import { UserRequestsService } from './user-requests.service.js';
 
 describe('UserRequestsController', () => {
-  let controller: UserRequestsController;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [UserRequestsController],
-      providers: [UserRequestsService],
-    }).compile();
-
-    controller = module.get<UserRequestsController>(UserRequestsController);
-  });
-
   it('should be defined', () => {
+    const prisma = { userRequest: { create: vi.fn() } };
+    const mailService = {
+      sendNewUserRequestNotification: vi.fn(),
+    };
+    const service = new UserRequestsService(
+      prisma as never,
+      mailService as never,
+    );
+    const controller = new UserRequestsController(service);
     expect(controller).toBeDefined();
   });
 });

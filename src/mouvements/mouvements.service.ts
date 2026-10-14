@@ -75,32 +75,36 @@ export class MouvementsService {
           },
         },
       });
-      if (!detail) {
-        detail = await tx.detailCompteMatiere.create({
-          data: {
-            compteMatiereId: compte.id,
-            articleId: dto.articleId,
-            prixUnitaire: dto.prixUnitaire,
-            existantDebut: 0,
-          },
-        });
-      }
 
       if (dto.type === TypeMouvement.SORTIE) {
-        const stock =
-          Number(detail.existantDebut) +
-          Number(detail.entrees) -
-          Number(detail.sorties);
-        if (dto.quantite > stock) {
+        // R2 stricte : sorties cumulées ≤ existant de début du détail
+        // de l'exercice courant (pas de consommation N-n).
+        if (!detail) {
           throw new BadRequestException(
-            `Stock insuffisant : disponible ${stock}, demandé ${dto.quantite}`,
+            'Aucun stock de cet article à ce prix sur cet exercice',
+          );
+        }
+        const sortiesCumulees = Number(detail.sorties) + dto.quantite;
+        if (sortiesCumulees > Number(detail.existantDebut)) {
+          throw new BadRequestException(
+            `Sorties cumulées (${sortiesCumulees}) supérieures à l'existant de début (${Number(detail.existantDebut)})`,
           );
         }
         await tx.detailCompteMatiere.update({
           where: { id: detail.id },
-          data: { sorties: Number(detail.sorties) + dto.quantite },
+          data: { sorties: sortiesCumulees },
         });
       } else {
+        if (!detail) {
+          detail = await tx.detailCompteMatiere.create({
+            data: {
+              compteMatiereId: compte.id,
+              articleId: dto.articleId,
+              prixUnitaire: dto.prixUnitaire,
+              existantDebut: 0,
+            },
+          });
+        }
         await tx.detailCompteMatiere.update({
           where: { id: detail.id },
           data: { entrees: Number(detail.entrees) + dto.quantite },
@@ -153,8 +157,7 @@ export class MouvementsService {
     });
   }
 
-  async findOne(id: number, userId: number) {
-    const user = await this.prisma.user.findUnique({
+  async findOne(id: number, userId: number) {    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true, soaId: true },
     });

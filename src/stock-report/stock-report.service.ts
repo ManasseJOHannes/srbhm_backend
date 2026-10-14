@@ -37,17 +37,36 @@ export class StockReportService {
         compteMatiere: {
           include: { details: { include: { article: true } } },
         },
+        mouvements: {
+          select: {
+            articleId: true,
+            prixUnitaire: true,
+            quantite: true,
+            type: true,
+          },
+        },
       },
       orderBy: { annee: 'asc' },
     });
 
     let negatifs = 0;
-    const lignes = exercices.flatMap((exercice) =>
-      (exercice.compteMatiere?.details ?? []).map((detail) => {
+    const lignes = exercices.flatMap((exercice) => {
+      const sortiesAnnee = new Map<string, number>();
+      for (const mouvement of exercice.mouvements ?? []) {
+        if (mouvement.type !== 'SORTIE') continue;
+        const cle = `${mouvement.articleId}:${Number(mouvement.prixUnitaire).toFixed(2)}`;
+        sortiesAnnee.set(
+          cle,
+          (sortiesAnnee.get(cle) ?? 0) + Number(mouvement.quantite),
+        );
+      }
+      return (exercice.compteMatiere?.details ?? []).map((detail) => {
+        const cle = `${detail.articleId}:${Number(detail.prixUnitaire).toFixed(2)}`;
+        const sorties = sortiesAnnee.get(cle) ?? 0;
         const stockFinal =
           Number(detail.existantDebut) +
           Number(detail.entrees) -
-          Number(detail.sorties);
+          sorties;
         const stockNegatif = stockFinal < 0;
         if (stockNegatif) negatifs += 1;
         return {
@@ -59,12 +78,12 @@ export class StockReportService {
           prixUnitaire: detail.prixUnitaire,
           stockInitial: detail.existantDebut,
           entrees: detail.entrees,
-          sorties: detail.sorties,
+          sorties,
           stockFinal,
           stockNegatif,
         };
-      }),
-    );
+      });
+    });
 
     return {
       soaId,

@@ -195,6 +195,38 @@ export class CompteMatieresService {
         'Un détail existe déjà pour cet article et ce prix',
       );
     }
+    // R4 : folio et observation uniques par détail au sein du compte.
+    if (dto.folioGrandLivre !== undefined) {
+      const folioPris = await this.prisma.detailCompteMatiere.findUnique({
+        where: {
+          compteMatiereId_folioGrandLivre: {
+            compteMatiereId: compte.id,
+            folioGrandLivre: dto.folioGrandLivre,
+          },
+        },
+      });
+      if (folioPris) {
+        throw new ConflictException(
+          `Le folio ${dto.folioGrandLivre} est déjà utilisé dans ce compte`,
+        );
+      }
+    }
+    if (dto.observation) {
+      const observationPrise =
+        await this.prisma.detailCompteMatiere.findUnique({
+          where: {
+            compteMatiereId_observation: {
+              compteMatiereId: compte.id,
+              observation: dto.observation.trim(),
+            },
+          },
+        });
+      if (observationPrise) {
+        throw new ConflictException(
+          'Cette observation est déjà utilisée dans ce compte',
+        );
+      }
+    }
     const detail = await this.prisma.detailCompteMatiere.create({
       data: {
         compteMatiereId: compte.id,
@@ -218,16 +250,19 @@ export class CompteMatieresService {
   }
 
   /**
-   * Reporte les soldes d'un exercice clôturé vers l'exercice suivant
-   * (même SOA, année + 1). Idempotent : les détails déjà présents
-   * (même article × prix) ne sont jamais écrasés mais signalés en
-   * conflits. Folio et observation sources sont recopiés.
+   * Report définitif : les restes au 31 décembre de l'exercice source
+   * (clôturé) deviennent l'existant de début de l'exercice suivant
+   * (même SOA), avec folio et observation recopiés. Idempotent : les
+   * détails déjà présents ne sont jamais écrasés mais signalés en
+   * conflits. On n'écrit jamais sur un exercice clôturé.
    */
   async reporterSoldes(exerciceId: number) {
     const source = await this.prisma.exercice.findUnique({
       where: { id: exerciceId },
       include: {
-        compteMatiere: { include: { details: true } },
+        compteMatiere: {
+          include: { details: { include: { article: true } } },
+        },
       },
     });
     if (!source) {
@@ -250,9 +285,8 @@ export class CompteMatieresService {
   }
 
   /**
-   * Reporte vers un exercice cible depuis le dernier exercice clôturé
-   * antérieur (même SOA). Sert la création de N+k quand N+1 n'existe pas
-   * ou n'est pas clôturé : on remonte la chaîne jusqu'au dernier clôturé.
+   * Report vers un exercice cible depuis le dernier exercice clôturé
+   * antérieur (même SOA). Sert la création de N+k.
    */
   async reporterDepuisDernierCloture(soaId: number, anneeCible: number) {
     const cible = await this.prisma.exercice.findUnique({
@@ -264,7 +298,9 @@ export class CompteMatieresService {
     const source = await this.prisma.exercice.findFirst({
       where: { soaId, annee: { lt: anneeCible }, statut: 'CLOTURE' },
       orderBy: { annee: 'desc' },
-      include: { compteMatiere: { include: { details: true } } },
+      include: {
+        compteMatiere: { include: { details: { include: { article: true } } } },
+      },
     });
     if (!source) {
       return { reporte: false as const, raison: 'AUCUN_CLOTURE_ANTERIEUR' };
@@ -286,6 +322,7 @@ export class CompteMatieresService {
           existantDebut: unknown;
           entrees: unknown;
           sorties: unknown;
+          article: { designation: string };
         }[];
       } | null;
     },
@@ -296,6 +333,7 @@ export class CompteMatieresService {
     }
     const soldes = (source.compteMatiere?.details ?? []).map((detail) => ({
       articleId: detail.articleId,
+      designation: detail.article.designation,
       prixUnitaire: Number(detail.prixUnitaire),
       folioGrandLivre: detail.folioGrandLivre,
       observation: detail.observation?.trim() || null,
@@ -353,8 +391,11 @@ export class CompteMatieresService {
             prixUnitaire: solde.prixUnitaire,
             folioGrandLivre: solde.folioGrandLivre,
             existantDebut: solde.quantite,
+            // R4 : l'observation par défaut inclut la désignation pour
+            // rester unique par détail au sein du compte.
             observation:
-              solde.observation ?? `Stock reporté de l'exercice ${source.annee}`,
+              solde.observation ??
+              `Stock reporté de l'exercice ${source.annee} — ${solde.designation}`,
           },
         });
         reportes += 1;

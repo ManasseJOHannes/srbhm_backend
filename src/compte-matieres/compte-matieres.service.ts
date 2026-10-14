@@ -223,6 +223,13 @@ export class CompteMatieresService {
    * (même SOA), avec folio et observation recopiés. Idempotent : les
    * détails déjà présents ne sont jamais écrasés mais signalés en
    * conflits. On n'écrit jamais sur un exercice clôturé.
+   *
+   * Observation recopiée (pièces justificatives conservées d'un exercice
+   * à l'autre) : 1) observation du détail source si présente, 2) sinon
+   * justificatifs des mouvements sources (article × prix) joints par
+   * " ; ", 3) sinon "Stock reporté de l'exercice N — désignation".
+   * En cas de doublon sur le compte cible, la désignation (puis le prix)
+   * est ajoutée pour respecter l'unicité, sans jamais masquer l'origine.
    */
   async reporterSoldes(exerciceId: number) {
     const source = await this.prisma.exercice.findUnique({
@@ -311,6 +318,24 @@ export class CompteMatieresService {
         Number(detail.sorties),
     }));
 
+    // Justificatifs initiaux (pièces des mouvements sources) par article ×
+    // prix, pour conserver l'observation d'origine quand le détail source
+    // n'en porte pas.
+    const mouvementsSource = await this.prisma.mouvement.findMany({
+      where: { exerciceId: source.id },
+      select: { articleId: true, prixUnitaire: true, observation: true },
+      orderBy: { id: 'asc' },
+    });
+    const justificatifsParCle = new Map<string, string[]>();
+    for (const mouvement of mouvementsSource) {
+      const texte = mouvement.observation?.trim();
+      if (!texte) continue;
+      const cle = `${mouvement.articleId}:${Number(mouvement.prixUnitaire).toFixed(2)}`;
+      const liste = justificatifsParCle.get(cle) ?? [];
+      if (!liste.includes(texte)) liste.push(texte);
+      justificatifsParCle.set(cle, liste);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       let compte = await tx.compteMatiere.findUnique({
         where: { exerciceId: cible.id },
@@ -320,6 +345,15 @@ export class CompteMatieresService {
           data: { exerciceId: cible.id },
         });
       }
+      const detailsCible = await tx.detailCompteMatiere.findMany({
+        where: { compteMatiereId: compte.id },
+        select: { observation: true },
+      });
+      const observationsPrises = new Set<string>(
+        detailsCible
+          .map((detail) => detail.observation)
+          .filter((observation): observation is string => observation != null),
+      );
       let reportes = 0;
       let ignores = 0;
       const conflits: {
@@ -359,11 +393,29 @@ export class CompteMatieresService {
             prixUnitaire: solde.prixUnitaire,
             folioGrandLivre: solde.folioGrandLivre,
             existantDebut: solde.quantite,
-            // R4 : l'observation par défaut inclut la désignation pour
-            // rester unique par détail au sein du compte.
-            observation:
-              solde.observation ??
-              `Stock reporté de l'exercice ${source.annee} — ${solde.designation}`,
+            // Observation initiale conservée : détail source, sinon
+            // justificatifs des mouvements sources, sinon fallback R4.
+            // Désambiguïsée (désignation, puis prix) en cas de doublon
+            // sur le compte cible, sans jamais masquer l'origine.
+            observation: (() => {
+              const cle = `${solde.articleId}:${solde.prixUnitaire.toFixed(2)}`;
+              const justificatifs = justificatifsParCle.get(cle) ?? [];
+              const base =
+                solde.observation ??
+                (justificatifs.length > 0
+                  ? justificatifs.join(' ; ')
+                  : null) ??
+                `Stock reporté de l'exercice ${source.annee} — ${solde.designation}`;
+              let unique = base;
+              if (observationsPrises.has(unique)) {
+                unique = `${base} — ${solde.designation}`;
+              }
+              if (observationsPrises.has(unique)) {
+                unique = `${base} — ${solde.designation} — ${solde.prixUnitaire}`;
+              }
+              observationsPrises.add(unique);
+              return unique;
+            })(),
           },
         });
         reportes += 1;

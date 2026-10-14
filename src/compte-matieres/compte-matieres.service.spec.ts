@@ -19,7 +19,10 @@ function makeService(overrides: Record<string, unknown> = {}) {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 7, ...data })),
     },
-    mouvement: { count: vi.fn().mockResolvedValue(0) },
+    mouvement: {
+      count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     $transaction: vi.fn((callback: (tx: unknown) => unknown) =>
       callback({
         detailCompteMatiere: { findMany: vi.fn().mockResolvedValue([]) },
@@ -241,6 +244,145 @@ describe('CompteMatieresService règles de gestion', () => {
       conflits: [{ articleId: 3, prixUnitaire: 100, existantEnregistre: 5, quantiteReportee: 8 }],
     });
     expect(tx.detailCompteMatiere.create).not.toHaveBeenCalled();
+  });
+
+  it("reprend les justificatifs des mouvements sources quand le détail n'a pas d'observation", async () => {
+    const source = {
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
+      compteMatiere: {
+        details: [
+          { articleId: 3, prixUnitaire: 100, folioGrandLivre: null, observation: null, existantDebut: 0, entrees: 5, sorties: 0, article: { designation: 'Chaise' } },
+        ],
+      },
+    };
+    const tx = {
+      compteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 10 }),
+        update: vi.fn().mockResolvedValue({ id: 10 }),
+      },
+      detailCompteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({ id: 8 }),
+      },
+    };
+    const prisma = {
+      exercice: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(source)
+          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12, statut: 'EN_COURS' }),
+      },
+      mouvement: {
+        findMany: vi.fn().mockResolvedValue([
+          { articleId: 3, prixUnitaire: 100, observation: 'Facture N°200' },
+          { articleId: 3, prixUnitaire: 100, observation: '  Facture N°200  ' },
+          { articleId: 3, prixUnitaire: 100, observation: 'Bon 12' },
+          { articleId: 9, prixUnitaire: 7, observation: 'Autre article' },
+          { articleId: 3, prixUnitaire: 100, observation: null },
+        ]),
+      },
+      $transaction: vi.fn((callback: (t: unknown) => unknown) => callback(tx)),
+    };
+    const { service } = makeService(prisma as unknown as Record<string, unknown>);
+    await service.reporterSoldes(5);
+    expect(tx.detailCompteMatiere.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          observation: 'Facture N°200 ; Bon 12',
+        }),
+      }),
+    );
+  });
+
+  it("conserve l'observation du détail source même avec des mouvements", async () => {
+    const source = {
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
+      compteMatiere: {
+        details: [
+          { articleId: 3, prixUnitaire: 100, folioGrandLivre: null, observation: 'Facture initiale', existantDebut: 5, entrees: 0, sorties: 0, article: { designation: 'Chaise' } },
+        ],
+      },
+    };
+    const tx = {
+      compteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 10 }),
+        update: vi.fn().mockResolvedValue({ id: 10 }),
+      },
+      detailCompteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({ id: 8 }),
+      },
+    };
+    const prisma = {
+      exercice: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(source)
+          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12, statut: 'EN_COURS' }),
+      },
+      mouvement: {
+        findMany: vi.fn().mockResolvedValue([
+          { articleId: 3, prixUnitaire: 100, observation: 'Facture mouvement' },
+        ]),
+      },
+      $transaction: vi.fn((callback: (t: unknown) => unknown) => callback(tx)),
+    };
+    const { service } = makeService(prisma as unknown as Record<string, unknown>);
+    await service.reporterSoldes(5);
+    expect(tx.detailCompteMatiere.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ observation: 'Facture initiale' }),
+      }),
+    );
+  });
+
+  it("désambiguïse avec la désignation en cas d'observation déjà prise", async () => {
+    const source = {
+      id: 5, annee: 2025, soaId: 12, statut: 'CLOTURE',
+      compteMatiere: {
+        details: [
+          { articleId: 3, prixUnitaire: 100, folioGrandLivre: null, observation: null, existantDebut: 5, entrees: 0, sorties: 0, article: { designation: 'Chaise' } },
+          { articleId: 4, prixUnitaire: 200, folioGrandLivre: null, observation: null, existantDebut: 2, entrees: 0, sorties: 0, article: { designation: 'Table' } },
+        ],
+      },
+    };
+    const tx = {
+      compteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 10 }),
+        update: vi.fn().mockResolvedValue({ id: 10 }),
+      },
+      detailCompteMatiere: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({ id: 8 }),
+      },
+    };
+    const prisma = {
+      exercice: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(source)
+          .mockResolvedValueOnce({ id: 6, annee: 2026, soaId: 12, statut: 'EN_COURS' }),
+      },
+      mouvement: {
+        findMany: vi.fn().mockResolvedValue([
+          { articleId: 3, prixUnitaire: 100, observation: 'Facture 1234' },
+          { articleId: 4, prixUnitaire: 200, observation: 'Facture 1234' },
+        ]),
+      },
+      $transaction: vi.fn((callback: (t: unknown) => unknown) => callback(tx)),
+    };
+    const { service } = makeService(prisma as unknown as Record<string, unknown>);
+    await service.reporterSoldes(5);
+    const calls = tx.detailCompteMatiere.create.mock.calls.map(
+      (call) => (call[0] as { data: { observation: string } }).data.observation,
+    );
+    expect(calls).toEqual(['Facture 1234', 'Facture 1234 — Table']);
   });
 
   it("n'écrit jamais sur un exercice cible clôturé", async () => {

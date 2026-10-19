@@ -45,6 +45,18 @@ export class UsersController {
     return this.usersService.update(+id, updateUserDto);
   }
 
+  /**
+   * Génère un mot de passe provisoire pour un compte sans email.
+   *
+   * Le mot de passe est renvoyé en clair une seule fois : à l'administrateur
+   * de le transmettre à l'utilisateur, qui le changera depuis « Compte ».
+   */
+  @Roles(Role.ADMIN)
+  @Post(':id/mdp-provisoire')
+  genererMotDePasseProvisoire(@Param('id') id: string) {
+    return this.usersService.genererMotDePasseProvisoire(Number(id));
+  }
+
   @Roles(Role.ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {

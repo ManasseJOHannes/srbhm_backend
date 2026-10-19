@@ -231,6 +231,9 @@ export class UsersService {
     };
     if (updateUserDto.password) {
       data.password = await bcrypt.hash(updateUserDto.password, 10);
+      // Un changement de mot de passe par l'admin révoque aussi les
+      // sessions ouvertes du compte concerné.
+      data.tokenVersion = { increment: 1 };
     }
     return this.prisma.user.update({
       where: { id },
@@ -248,6 +251,36 @@ export class UsersService {
         email: true,
       },
     });
+  }
+
+  /**
+   * Génère un mot de passe provisoire pour un utilisateur (ADMIN).
+   *
+   * Filet de sécurité pour les comptes sans adresse email : le demandeur
+   * ne peut pas utiliser le lien de réinitialisation, seul l'administrateur
+   * peut lui en fournir un. Le mot de passe provisoire n'est renvoyé qu'ici,
+   * en clair, et n'est jamais stocké : seul son hash bcrypt l'est.
+   *
+   * Incrémente `tokenVersion` : toutes les sessions du compte concerné sont
+   * immédiatement révoquées.
+   */
+  async genererMotDePasseProvisoire(id: number) {
+    await this.findOne(id);
+
+    const motDePasse = this.generateTemporaryPassword();
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        password: await bcrypt.hash(motDePasse, 10),
+        tokenVersion: { increment: 1 },
+      },
+    });
+
+    return {
+      motDePasseTemporaire: motDePasse,
+      message:
+        'Mot de passe provisoire généré. Transmettez-le à l\'utilisateur : il ne sera plus jamais affiché.',
+    };
   }
 
   async remove(id: number) {

@@ -22,6 +22,30 @@ model User {
   password   String
   soaId      Int
   soa        SOA      @relation(fields: [soaId], references: [id])
+
+  /// Incrémenté à chaque changement de mot de passe ou réinitialisation.
+  /// Copié dans le JWT à la connexion puis comparé à chaque requête :
+  /// un écart invalide tous les jetons émis auparavant (déconnexion forcée).
+  tokenVersion Int                   @default(0)
+  resetTokens  PasswordResetToken[]
+}
+
+/// Jeton de réinitialisation de mot de passe, à usage unique et expirant.
+///
+/// Seul le SHA-256 du jeton est stocké : la base ne contient jamais le
+/// jeton utilisable. Si la base fuite, les liens de reset sont inutilisables.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserRequest {

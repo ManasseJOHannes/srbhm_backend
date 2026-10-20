@@ -21,4 +21,8 @@ export class CreateArticleDto {
   @IsInt()
   @Min(1)
   nomenclatureId: number;
+
+  @IsInt()
+  @Min(1)
+  paragrapheId: number;
 }

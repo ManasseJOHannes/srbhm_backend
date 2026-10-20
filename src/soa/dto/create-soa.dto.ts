@@ -14,6 +14,10 @@ export class CreateSoaDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  localite?: string;
+
+  @IsOptional()
   @IsBoolean()
   actif?: boolean;
 }

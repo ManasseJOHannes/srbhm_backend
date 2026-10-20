@@ -71,6 +71,8 @@ model SOA {
   code         String        @unique
   libelle      String
   description  String?
+  /// Localité imprimée sur l'en-tête officiel de l'inventaire (« Hôtel du (2) »).
+  localite     String?
   actif        Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -109,6 +111,43 @@ model Nomenclature {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   articles    Article[]
+  paragraphes Paragraphe[]
+}
+
+/// Chapitre budgétaire (2 chiffres, ex. 21).
+model Chapitre {
+  id       Int           @id @default(autoincrement())
+  chapitre String        @unique
+  articles CodeArticle[]
+}
+
+/// Article budgétaire (3 chiffres, ex. 216), rattaché à un chapitre.
+model CodeArticle {
+  id          Int          @id @default(autoincrement())
+  chapitreId  Int
+  chapitre    Chapitre     @relation(fields: [chapitreId], references: [id])
+  article     String
+  libelle     String?
+  paragraphes Paragraphe[]
+
+  @@unique([chapitreId, article])
+  @@index([chapitreId])
+}
+
+/// Paragraphe / code compte (4 chiffres, ex. 2164). Porte l'association
+/// facultative avec une nomenclature métier.
+model Paragraphe {
+  id             Int           @id @default(autoincrement())
+  articleId      Int
+  article        CodeArticle   @relation(fields: [articleId], references: [id])
+  code           String        @unique
+  libelle        String
+  nomenclatureId Int?
+  nomenclature   Nomenclature? @relation(fields: [nomenclatureId], references: [id], onDelete: SetNull)
+  articles       Article[]
+
+  @@index([articleId])
+  @@index([nomenclatureId])
 }
 
 model Article {
@@ -119,11 +158,14 @@ model Article {
   updatedAt      DateTime              @updatedAt
   nomenclatureId Int
   nomenclature   Nomenclature          @relation(fields: [nomenclatureId], references: [id])
+  paragrapheId   Int
+  paragraphe     Paragraphe            @relation(fields: [paragrapheId], references: [id])
   details        DetailCompteMatiere[]
   lignesInventaire LigneInventaire[]
   mouvements     Mouvement[]
 
   @@index([nomenclatureId])
+  @@index([paragrapheId])
 }
 
 model CompteMatiere {

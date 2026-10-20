@@ -33,7 +33,20 @@ export class InventaireService {
         soa: true,
         compteMatiere: {
           include: {
-            details: { include: { article: { include: { nomenclature: true } } } },
+            details: {
+              include: {
+                article: {
+                  include: {
+                    nomenclature: true,
+                    paragraphe: {
+                      include: {
+                        article: { include: { chapitre: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         mouvements: {
@@ -72,6 +85,9 @@ export class InventaireService {
       unite: string;
       nomenclatureCode: string;
       nomenclatureLibelle: string;
+      chapitreCode: string;
+      articleCode: string;
+      paragrapheCode: string;
       folioGrandLivre: number | null;
       prixUnitaire: unknown;
       existantDebut: unknown;
@@ -140,6 +156,9 @@ export class InventaireService {
         unite: detail.article.unite,
         nomenclatureCode: detail.article.nomenclature.code,
         nomenclatureLibelle: detail.article.nomenclature.libelle,
+        chapitreCode: detail.article.paragraphe.article.chapitre.chapitre,
+        articleCode: detail.article.paragraphe.article.article,
+        paragrapheCode: detail.article.paragraphe.code,
         folioGrandLivre: detail.folioGrandLivre,
         prixUnitaire: detail.prixUnitaire,
         existantDebut: detail.existantDebut,

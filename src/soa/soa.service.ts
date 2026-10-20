@@ -29,6 +29,7 @@ export class SoaService {
         code: createSoaDto.code,
         libelle: createSoaDto.libelle,
         description: createSoaDto.description,
+        localite: createSoaDto.localite,
         actif: createSoaDto.actif ?? true
       }
     });

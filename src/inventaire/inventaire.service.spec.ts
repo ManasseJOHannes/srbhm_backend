@@ -24,6 +24,10 @@ const exercice = {
           designation: 'Chaise',
           unite: 'pièce',
           nomenclature: { code: '03', libelle: 'Meubles' },
+          paragraphe: {
+            code: '2164',
+            article: { article: '216', chapitre: { chapitre: '21' } },
+          },
         },
       },
       {
@@ -38,6 +42,10 @@ const exercice = {
           designation: 'Table',
           unite: 'pièce',
           nomenclature: { code: '03', libelle: 'Meubles' },
+          paragraphe: {
+            code: '2163',
+            article: { article: '216', chapitre: { chapitre: '21' } },
+          },
         },
       },
     ],
@@ -79,6 +87,9 @@ describe('InventaireService règles de gestion', () => {
       folioGrandLivre: 12,
       nomenclatureCode: '03',
       nomenclatureLibelle: 'Meubles',
+      chapitreCode: '21',
+      articleCode: '216',
+      paragrapheCode: '2164',
       observations: ['Bon état', 'Facture N°200'],
     });
     expect(snapshot.lignes[1]).toMatchObject({ observations: [] });

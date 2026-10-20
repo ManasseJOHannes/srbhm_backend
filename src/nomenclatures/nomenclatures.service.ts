@@ -18,9 +18,7 @@ export class NomenclaturesService {
     }
     return this.prisma.nomenclature.create({
       data: {
-        code: createNomenclatureDto.code,
-        libelle: createNomenclatureDto.libelle,
-        description: createNomenclatureDto.description,
+        ...createNomenclatureDto,
         actif: createNomenclatureDto.actif ?? true,
       },
     });

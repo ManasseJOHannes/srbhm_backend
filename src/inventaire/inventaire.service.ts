@@ -160,16 +160,20 @@ export class InventaireService {
 
       // Les lignes historiques n'ont pas de colonnes explicites : on
       // conserve leur ancien calcul excédent/déficit à partir de l'écart.
-      let quantiteExcedent =
+      const excedentStocke =
         ligneEnregistree?.quantiteExcedent === null ||
         ligneEnregistree?.quantiteExcedent === undefined
           ? null
           : Number(ligneEnregistree.quantiteExcedent);
-      let quantiteDeficit =
+      const deficitStocke =
         ligneEnregistree?.quantiteDeficit === null ||
         ligneEnregistree?.quantiteDeficit === undefined
           ? null
           : Number(ligneEnregistree.quantiteDeficit);
+      const ajustementsExplicites =
+        excedentStocke !== null || deficitStocke !== null;
+      let quantiteExcedent = excedentStocke;
+      let quantiteDeficit = deficitStocke;
       if (
         ligneEnregistree &&
         referenceStockee === null &&
@@ -184,14 +188,24 @@ export class InventaireService {
         decomptePhysique === null
           ? null
           : decomptePhysique - existantReference;
+      const ecartArrondi =
+        ecart === null ? null : Math.round(ecart * 100) / 100;
+      const ecartAttendu =
+        Math.round(
+          ((quantiteExcedent ?? 0) - (quantiteDeficit ?? 0)) * 100,
+        ) / 100;
+      const ecartIncoherent =
+        ecartArrondi !== null &&
+        (ajustementsExplicites
+          ? ecartArrondi !== ecartAttendu
+          : ecartArrondi !== 0);
       const observations = [
         ...(detail.observation?.trim() ? [detail.observation.trim()] : []),
         ...(observationsMouvements.get(cle) ?? []),
       ];
-      const ligneAvertissements =
-        ecart !== null && ecart !== 0
-          ? [`Écart de ${ecart} entre le décompte physique et l'existant de référence`]
-          : [];
+      const ligneAvertissements = ecartIncoherent
+        ? [`Écart de ${ecartArrondi} entre le décompte physique et l'existant de référence`]
+        : [];
       for (const message of ligneAvertissements) {
         avertissements.push(`${detail.article.designation} : ${message}`);
       }

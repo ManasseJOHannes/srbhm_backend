@@ -25,6 +25,8 @@ const PROFIL = {
   cin: '101051029954',
   telephone: '0340510299',
   adresse: 'Antsirabe',
+  civilite: 'Madame',
+  qualite: 'Contrôleur d’État',
   email: 'rakoto@example.mg',
   role: 'COMPTABLE',
   soa: { id: 1, code: 'SRB-HM', libelle: 'SRB Haute Matsiatra' },
@@ -161,6 +163,37 @@ describe('AuthService - profil et auto-modification', () => {
       await service.updateMe(7, {});
 
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('enregistre la civilité et la qualité en nettoyant les espaces', async () => {
+      await service.updateMe(7, {
+        civilite: 'Madame',
+        qualite: '  Contrôleur d’État  ',
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      const { data } = prisma.user.update.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      };
+
+      expect(data).toEqual({
+        civilite: 'Madame',
+        qualite: 'Contrôleur d’État',
+      });
+    });
+
+    it('remet à null les mentions vidées', async () => {
+      await service.updateMe(7, {
+        civilite: null,
+        qualite: '   ',
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      const { data } = prisma.user.update.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      };
+
+      expect(data).toEqual({ civilite: null, qualite: null });
     });
 
     it('refuse un email déjà utilisé par un autre utilisateur', async () => {

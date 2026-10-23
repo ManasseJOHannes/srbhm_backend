@@ -201,6 +201,31 @@ describe('InventaireService règles de gestion', () => {
     expect(snapshot.exercice.dateFin).toBeInstanceOf(Date);
   });
 
+  it("ne signale pas un décompte physique identique à l'existant", async () => {
+    const { service, prisma } = makeService();
+    const avecDecompte = {
+      ...exercice,
+      inventaire: {
+        id: 1,
+        dateInventaire: new Date(),
+        lignes: [
+          {
+            articleId: 3,
+            prixUnitaire: 100,
+            existantReference: 12,
+            quantitePhysique: 12,
+          },
+        ],
+      },
+    };
+    vi.mocked(prisma.exercice.findUnique).mockResolvedValue(avecDecompte as never);
+    vi.mocked(prisma.exercice.findMany).mockResolvedValue([avecDecompte] as never);
+    const snapshot = await service.obtenir(5, 4);
+    expect(snapshot.lignes[0].ecart).toBe(0);
+    expect(snapshot.avertissements).toEqual([]);
+    expect(snapshot.coherent).toBe(true);
+  });
+
   it('détecte un écart de décompte physique', async () => {
     const { service, prisma } = makeService();
     const avecDecompte = {
@@ -217,6 +242,33 @@ describe('InventaireService règles de gestion', () => {
     expect(snapshot.coherent).toBe(false);
     expect(snapshot.lignes[0].ecart).toBe(-3);
     expect(snapshot.avertissements).toHaveLength(1);
+  });
+
+  it('ne signale pas un écart expliqué par un excédent ou un déficit', async () => {
+    const { service, prisma } = makeService();
+    const avecDecompte = {
+      ...exercice,
+      inventaire: {
+        id: 1,
+        dateInventaire: new Date(),
+        lignes: [
+          {
+            articleId: 3,
+            prixUnitaire: 100,
+            existantReference: 12,
+            quantitePhysique: 14,
+            quantiteExcedent: 2,
+            quantiteDeficit: null,
+          },
+        ],
+      },
+    };
+    vi.mocked(prisma.exercice.findUnique).mockResolvedValue(avecDecompte as never);
+    vi.mocked(prisma.exercice.findMany).mockResolvedValue([avecDecompte] as never);
+    const snapshot = await service.obtenir(5, 4);
+    expect(snapshot.lignes[0].ecart).toBe(2);
+    expect(snapshot.avertissements).toEqual([]);
+    expect(snapshot.coherent).toBe(true);
   });
 
   it('refuse la saisie sur exercice clôturé (R3)', async () => {

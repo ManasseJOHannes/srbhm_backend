@@ -16,6 +16,8 @@ model User {
   telephone  String   @unique
   role       Role     @default(DEPOSITEUR_COMPTABLE)
   adresse    String
+  civilite   String?
+  qualite    String?
   email      String?  @unique
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

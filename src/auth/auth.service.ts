@@ -26,6 +26,8 @@ const PROFIL_ME = {
     cin: true,
     telephone: true,
     adresse: true,
+    civilite: true,
+    qualite: true,
     email: true,
     role: true,
     soa: { select: { id: true, code: true, libelle: true } },
@@ -118,18 +120,25 @@ export class AuthService {
     }
 
     /**
-     * Auto-modification limitée aux coordonnées de contact (PATCH /auth/me).
+     * Auto-modification limitée aux coordonnées de contact et aux mentions
+     * d'identité utilisées dans les exports (PATCH /auth/me).
      *
-     * Le whitelist est un littéral : seuls email / telephone / adresse
-     * proviennent du corps de la requête. Rôle, SOA, matricule, CIN, nom et
-     * prénom ne peuvent donc pas être modifiés par l'intéressé, même si la
-     * validation DTO était contournée. Survit à une régression de la
-     * configuration du ValidationPipe global.
+     * Le whitelist est un littéral : seuls email / telephone / adresse /
+     * civilite / qualite proviennent du corps de la requête. Rôle, SOA,
+     * matricule, CIN, nom et prénom ne peuvent donc pas être modifiés par
+     * l'intéressé, même si la validation DTO était contournée. Survit à une
+     * régression de la configuration du ValidationPipe global.
      */
     async updateMe(userId: number, dto: UpdateMeDto) {
         await this.me(userId); // 404 si l'utilisateur n'existe plus
 
-        const data: { email?: string; telephone?: string; adresse?: string } = {};
+        const data: {
+            email?: string;
+            telephone?: string;
+            adresse?: string;
+            civilite?: string | null;
+            qualite?: string | null;
+        } = {};
 
         if (dto.email !== undefined) {
             const autre = await this.prisma.user.findUnique({
@@ -159,6 +168,14 @@ export class AuthService {
 
         if (dto.adresse !== undefined) {
             data.adresse = dto.adresse;
+        }
+
+        if (dto.civilite !== undefined) {
+            data.civilite = dto.civilite?.trim() || null;
+        }
+
+        if (dto.qualite !== undefined) {
+            data.qualite = dto.qualite?.trim() || null;
         }
 
         if (Object.keys(data).length > 0) {

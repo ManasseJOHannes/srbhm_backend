@@ -16,6 +16,8 @@ model User {
   telephone  String   @unique
   role       Role     @default(DEPOSITEUR_COMPTABLE)
   adresse    String
+  civilite   String?
+  qualite    String?
   email      String?  @unique
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -26,7 +28,7 @@ model User {
   /// Incrémenté à chaque changement de mot de passe ou réinitialisation.
   /// Copié dans le JWT à la connexion puis comparé à chaque requête :
   /// un écart invalide tous les jetons émis auparavant (déconnexion forcée).
-  tokenVersion Int                   @default(0)
+  tokenVersion Int                  @default(0)
   resetTokens  PasswordResetToken[]
 }
 
@@ -90,9 +92,9 @@ model Exercice {
   dateFin       DateTime
   statut        StatutExercice @default(EN_COURS)
   soaId         Int
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  soa           SOA                   @relation(fields: [soaId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  soa           SOA            @relation(fields: [soaId], references: [id])
   compteMatiere CompteMatiere?
   inventaire    Inventaire?
   mouvements    Mouvement[]
@@ -103,13 +105,13 @@ model Exercice {
 }
 
 model Nomenclature {
-  id          Int       @id @default(autoincrement())
-  code        String    @unique
+  id          Int          @id @default(autoincrement())
+  code        String       @unique
   libelle     String
   description String?
-  actif       Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  actif       Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   articles    Article[]
   paragraphes Paragraphe[]
 }
@@ -151,18 +153,18 @@ model Paragraphe {
 }
 
 model Article {
-  id             Int                   @id @default(autoincrement())
-  designation    String
-  unite          String
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  nomenclatureId Int
-  nomenclature   Nomenclature          @relation(fields: [nomenclatureId], references: [id])
-  paragrapheId   Int
-  paragraphe     Paragraphe            @relation(fields: [paragrapheId], references: [id])
-  details        DetailCompteMatiere[]
+  id               Int                   @id @default(autoincrement())
+  designation      String
+  unite            String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  nomenclatureId   Int
+  nomenclature     Nomenclature          @relation(fields: [nomenclatureId], references: [id])
+  paragrapheId     Int
+  paragraphe       Paragraphe            @relation(fields: [paragrapheId], references: [id])
+  details          DetailCompteMatiere[]
   lignesInventaire LigneInventaire[]
-  mouvements     Mouvement[]
+  mouvements       Mouvement[]
 
   @@index([nomenclatureId])
   @@index([paragrapheId])
@@ -191,6 +193,9 @@ model DetailCompteMatiere {
   entrees         Decimal       @default(0)
   sorties         Decimal       @default(0)
   observation     String?
+  observationEtat String        @default("Bon état")
+  /// Détail créé par un excédent de recensement, supprimable lorsqu'il redevient vide.
+  creeParRecensement Boolean    @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   article         Article       @relation(fields: [articleId], references: [id])
@@ -202,18 +207,21 @@ model DetailCompteMatiere {
 }
 
 model Mouvement {
-  id                   Int           @id @default(autoincrement())
-  type                 TypeMouvement
-  date                 DateTime
-  exerciceId           Int
-  articleId            Int
-  quantite             Decimal
-  prixUnitaire         Decimal
-  observation          String?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-  article              Article       @relation(fields: [articleId], references: [id])
-  exercice             Exercice      @relation(fields: [exerciceId], references: [id])
+  id                Int              @id @default(autoincrement())
+  type              TypeMouvement
+  date              DateTime
+  exerciceId        Int
+  articleId         Int
+  quantite          Decimal
+  prixUnitaire      Decimal
+  observation       String?
+  origine           OrigineMouvement @default(MANUEL)
+  ligneInventaireId Int?             @unique
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  article           Article          @relation(fields: [articleId], references: [id])
+  exercice          Exercice         @relation(fields: [exerciceId], references: [id])
+  ligneInventaire   LigneInventaire? @relation(fields: [ligneInventaireId], references: [id], onDelete: Cascade)
 
   @@index([exerciceId])
   @@index([articleId])
@@ -232,15 +240,20 @@ model Inventaire {
 }
 
 model LigneInventaire {
-  id               Int        @id @default(autoincrement())
-  inventaireId     Int
-  articleId        Int
-  prixUnitaire     Decimal
-  quantitePhysique Decimal    @db.Decimal(12, 2)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  inventaire       Inventaire @relation(fields: [inventaireId], references: [id])
-  article          Article    @relation(fields: [articleId], references: [id])
+  id                Int        @id @default(autoincrement())
+  inventaireId      Int
+  articleId         Int
+  prixUnitaire      Decimal
+  quantitePhysique  Decimal    @db.Decimal(12, 2)
+  quantiteExcedent  Decimal?   @db.Decimal(12, 2)
+  quantiteDeficit   Decimal?   @db.Decimal(12, 2)
+  /// Existant figé avant les ajustements créés par le recensement.
+  existantReference Decimal?   @db.Decimal(12, 2)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  inventaire        Inventaire @relation(fields: [inventaireId], references: [id])
+  article           Article    @relation(fields: [articleId], references: [id])
+  mouvement         Mouvement?
 
   @@unique([inventaireId, articleId, prixUnitaire])
   @@index([inventaireId])
@@ -269,4 +282,9 @@ enum StatutExercice {
 enum TypeMouvement {
   ENTREE
   SORTIE
+}
+
+enum OrigineMouvement {
+  MANUEL
+  RECENSEMENT
 }

@@ -22,13 +22,23 @@ import { UpdateParagrapheDto } from './dto/update-paragraphe.dto.js';
 export class CodeComptesController {
   constructor(private readonly codeComptesService: CodeComptesService) {}
 
-  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Roles(
+    Role.ADMIN,
+    Role.COMPTABLE,
+    Role.DEPOSITEUR_COMPTABLE,
+    Role.ORDONNATEUR,
+  )
   @Get()
   findAll() {
     return this.codeComptesService.findAll();
   }
 
-  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Roles(
+    Role.ADMIN,
+    Role.COMPTABLE,
+    Role.DEPOSITEUR_COMPTABLE,
+    Role.ORDONNATEUR,
+  )
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.codeComptesService.findOne(id);

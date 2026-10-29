@@ -18,13 +18,23 @@ export class NomenclaturesController {
     return this.nomenclaturesService.create(createNomenclatureDto);
   }
 
-  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Roles(
+    Role.ADMIN,
+    Role.COMPTABLE,
+    Role.DEPOSITEUR_COMPTABLE,
+    Role.ORDONNATEUR,
+  )
   @Get()
   findAll() {
     return this.nomenclaturesService.findAll();
   }
 
-  @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
+  @Roles(
+    Role.ADMIN,
+    Role.COMPTABLE,
+    Role.DEPOSITEUR_COMPTABLE,
+    Role.ORDONNATEUR,
+  )
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.nomenclaturesService.findOne(id);

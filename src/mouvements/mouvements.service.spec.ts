@@ -35,7 +35,10 @@ function makeService(overrides: Record<string, unknown> = {}) {
         .mockResolvedValue({ id: 7, existantDebut: 0, entrees: 0, sorties: 0 }),
       update: vi.fn().mockImplementation(({ data }: any) => Promise.resolve(data)),
     },
-    mouvement: { create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 11, ...data })) },
+    mouvement: {
+      create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 11, ...data })),
+      delete: vi.fn().mockResolvedValue({ id: 11 }),
+    },
   };
   const prisma = {
     user: { findUnique: vi.fn().mockResolvedValue({ id: 4, ...depositaire }) },
@@ -61,7 +64,10 @@ function makeService2(txDetail: Record<string, unknown>) {
       create: vi.fn(),
       update: vi.fn().mockImplementation(({ data }: any) => Promise.resolve(data)),
     },
-    mouvement: { create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 11, ...data })) },
+    mouvement: {
+      create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 11, ...data })),
+      delete: vi.fn().mockResolvedValue({ id: 11 }),
+    },
   };
   const prisma2 = {
     user: { findUnique: vi.fn().mockResolvedValue({ id: 4, ...depositaire }) },
@@ -180,5 +186,134 @@ describe('MouvementsService regles de gestion', () => {
         data: expect.objectContaining({ folioGrandLivre: 12 }),
       }),
     );
+  });
+});
+
+const mouvementManuel = {
+  id: 11,
+  type: 'ENTREE' as const,
+  quantite: 4,
+  articleId: 3,
+  prixUnitaire: 100,
+  origine: 'MANUEL' as const,
+  exerciceId: 5,
+  exercice: { ...exercice, statut: 'EN_COURS' },
+};
+
+describe('MouvementsService suppression', () => {
+  it('refuse la suppression sur un exercice cloture sans toucher a la base', async () => {
+    const { service, prisma, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...mouvementManuel,
+          exercice: { ...exercice, statut: 'CLOTURE' },
+        }),
+      },
+    });
+
+    await expect(service.remove(11, 4)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.mouvement.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuse un mouvement d'un autre SOA", async () => {
+    const { service } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...mouvementManuel,
+          exercice: { ...exercice, soaId: 99 },
+        }),
+      },
+    });
+
+    await expect(service.remove(11, 4)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('refuse la suppression d un mouvement de recensement', async () => {
+    const { service } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...mouvementManuel,
+          origine: 'RECENSEMENT',
+        }),
+      },
+    });
+
+    await expect(service.remove(11, 4)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('supprime une entree et decremente les entrees du detail', async () => {
+    const { service, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue(mouvementManuel),
+      },
+    });
+    tx.compteMatiere.findUnique.mockResolvedValue({ id: 9 });
+    tx.detailCompteMatiere.findUnique.mockResolvedValue({
+      id: 7,
+      existantDebut: 20,
+      entrees: 10,
+      sorties: 6,
+    });
+
+    await expect(service.remove(11, 4)).resolves.toEqual({ id: 11 });
+    expect(tx.detailCompteMatiere.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { entrees: 6 },
+    });
+    expect(tx.mouvement.delete).toHaveBeenCalledWith({ where: { id: 11 } });
+    expect(tx.compteMatiere.update).toHaveBeenCalled();
+  });
+
+  it('supprime une sortie et decremente les sorties du detail', async () => {
+    const { service, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...mouvementManuel,
+          type: 'SORTIE',
+        }),
+      },
+    });
+    tx.compteMatiere.findUnique.mockResolvedValue({ id: 9 });
+    tx.detailCompteMatiere.findUnique.mockResolvedValue({
+      id: 7,
+      existantDebut: 20,
+      entrees: 0,
+      sorties: 10,
+    });
+
+    await service.remove(11, 4);
+    expect(tx.detailCompteMatiere.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { sorties: 6 },
+    });
+    expect(tx.mouvement.delete).toHaveBeenCalledWith({ where: { id: 11 } });
+  });
+
+  it('refuse de supprimer une entree si le stock restant deviendrait insuffisant', async () => {
+    const { service, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue(mouvementManuel),
+      },
+    });
+    tx.compteMatiere.findUnique.mockResolvedValue({ id: 9 });
+    tx.detailCompteMatiere.findUnique.mockResolvedValue({
+      id: 7,
+      existantDebut: 0,
+      entrees: 4,
+      sorties: 4,
+    });
+
+    await expect(service.remove(11, 4)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(tx.detailCompteMatiere.update).not.toHaveBeenCalled();
+    expect(tx.mouvement.delete).not.toHaveBeenCalled();
   });
 });

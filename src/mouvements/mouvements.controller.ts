@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator.js';
@@ -33,5 +33,11 @@ export class MouvementsController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.mouvementsService.findOne(id, req.user.id);
+  }
+
+  @Roles(Role.DEPOSITEUR_COMPTABLE)
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.mouvementsService.remove(id, req.user.id);
   }
 }

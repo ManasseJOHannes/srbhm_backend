@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role, TypeMouvement } from '@prisma/client';
+import { OrigineMouvement, Role, TypeMouvement } from '@prisma/client';
 import { CreateMouvementDto } from './dto/create-mouvement.dto.js';
 import { recalculerValeursCompte } from '../compte-matieres/compte-matieres.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -143,8 +143,7 @@ export class MouvementsService {
     });
   }
 
-  async findAll(userId: number, exerciceId?: number) {
-    const user = await this.prisma.user.findUnique({
+  async findAll(userId: number, exerciceId?: number) {    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true, soaId: true },
     });
@@ -191,5 +190,96 @@ export class MouvementsService {
       throw new NotFoundException('Mouvement introuvable');
     }
     return mouvement;
+  }
+
+  async remove(id: number, userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, soaId: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    if (user.role !== Role.DEPOSITEUR_COMPTABLE) {
+      throw new ForbiddenException(
+        'Seul le dépositaire-comptable peut supprimer un mouvement',
+      );
+    }
+
+    const mouvement = await this.prisma.mouvement.findUnique({
+      where: { id },
+      include: { exercice: true },
+    });
+    if (!mouvement || mouvement.exercice.soaId !== user.soaId) {
+      throw new NotFoundException('Mouvement introuvable');
+    }
+    if (mouvement.exercice.statut === 'CLOTURE') {
+      throw new ForbiddenException('Cet exercice est clôturé');
+    }
+    if (mouvement.origine !== OrigineMouvement.MANUEL) {
+      throw new BadRequestException(
+        'Un mouvement issu du recensement ne peut pas être supprimé',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const compte = await tx.compteMatiere.findUnique({
+        where: { exerciceId: mouvement.exerciceId },
+      });
+      if (!compte) {
+        throw new NotFoundException(
+          'Compte matière introuvable pour cet exercice',
+        );
+      }
+
+      const detail = await tx.detailCompteMatiere.findUnique({
+        where: {
+          compteMatiereId_articleId_prixUnitaire: {
+            compteMatiereId: compte.id,
+            articleId: mouvement.articleId,
+            prixUnitaire: mouvement.prixUnitaire,
+          },
+        },
+      });
+      if (!detail) {
+        throw new BadRequestException('Détail du compte matière introuvable');
+      }
+
+      const quantite = Number(mouvement.quantite);
+
+      if (mouvement.type === TypeMouvement.ENTREE) {
+        const nouvellesEntrees = Number(detail.entrees) - quantite;
+        if (nouvellesEntrees < 0) {
+          throw new BadRequestException(
+            'Les entrées du détail deviendraient négatives',
+          );
+        }
+        if (
+          Number(detail.existantDebut) + nouvellesEntrees <
+          Number(detail.sorties)
+        ) {
+          throw new BadRequestException(
+            'Suppression impossible : les sorties dépasseraient le stock disponible',
+          );
+        }
+        await tx.detailCompteMatiere.update({
+          where: { id: detail.id },
+          data: { entrees: nouvellesEntrees },
+        });
+      } else {
+        const nouvellesSorties = Number(detail.sorties) - quantite;
+        if (nouvellesSorties < 0) {
+          throw new BadRequestException(
+            'Les sorties du détail deviendraient négatives',
+          );
+        }
+        await tx.detailCompteMatiere.update({
+          where: { id: detail.id },
+          data: { sorties: nouvellesSorties },
+        });
+      }
+
+      const supprime = await tx.mouvement.delete({ where: { id } });
+      await recalculerValeursCompte(tx, compte.id);
+      return supprime;
+    });
   }
 }

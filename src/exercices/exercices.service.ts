@@ -187,19 +187,46 @@ async create(
     if (exercice.statut === 'CLOTURE') {
       throw new ForbiddenException('Un exercice clôturé ne peut pas être rouvert');
     }
+    if (updateExerciceDto.statut === 'CLOTURE') {
+      throw new ForbiddenException(
+        'La clôture se fait uniquement via la génération du quitus par le comptable',
+      );
+    }
 
-    const updated = await this.prisma.exercice.update({
+    return this.prisma.exercice.update({
       where: { id },
       data: updateExerciceDto,
       include: {
         soa: true,
       },
     });
+  }
 
-    // Clôture : les restes au 31 décembre deviennent l'existant de N+1.
-    if (updateExerciceDto.statut === 'CLOTURE') {
-      await this.compteMatieresService.reporterSoldes(id);
+  /**
+   * Clôture définitive d'un exercice (réservée au comptable via le Quitus).
+   * Les restes au 31 décembre deviennent l'existant de début de N+1.
+   */
+  async cloturer(id: number) {
+    const exercice = await this.prisma.exercice.findUnique({
+      where: { id },
+    });
+
+    if (!exercice) {
+      throw new NotFoundException('Exercice introuvable');
     }
+    if (exercice.statut === 'CLOTURE') {
+      throw new ConflictException('Cet exercice est déjà clôturé');
+    }
+
+    const updated = await this.prisma.exercice.update({
+      where: { id },
+      data: { statut: 'CLOTURE' },
+      include: {
+        soa: true,
+      },
+    });
+
+    await this.compteMatieresService.reporterSoldes(id);
 
     return updated;
   }

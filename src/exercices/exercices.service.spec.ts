@@ -89,15 +89,20 @@ describe('ExercicesService SOA access control', () => {
     await expect(service.findOne(21, 4)).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('allows update on own exercise and rejects update on another SOA', async () => {
-    const own = makeService(12);
-    await expect(
-      own.service.update(21, { statut: 'CLOTURE' } as never, 4),
-    ).resolves.toMatchObject({ statut: 'CLOTURE' });
+  it('refuse la clôture manuelle par le dépositaire', async () => {
+    const { service, prisma, compteMatieresService } = makeService(12);
 
+    await expect(
+      service.update(21, { statut: 'CLOTURE' } as never, 4),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.exercice.update).not.toHaveBeenCalled();
+    expect(compteMatieresService.reporterSoldes).not.toHaveBeenCalled();
+  });
+
+  it("refuse la modification d'un exercice d'un autre SOA", async () => {
     const foreign = makeService(99);
     await expect(
-      foreign.service.update(21, { statut: 'CLOTURE' } as never, 4),
+      foreign.service.update(21, { statut: 'EN_COURS' } as never, 4),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(foreign.prisma.exercice.update).not.toHaveBeenCalled();
   });
@@ -133,11 +138,40 @@ describe('ExercicesService SOA access control', () => {
     expect(prisma.exercice.update).not.toHaveBeenCalled();
   });
 
-  it('reporte les restes vers N+1 à la clôture', async () => {
-    const { service, compteMatieresService } = makeService(12);
-    await expect(
-      service.update(21, { statut: 'CLOTURE' } as never, 4),
-    ).resolves.toMatchObject({ statut: 'CLOTURE' });
+  it('clôture un exercice en cours et reporte les soldes vers N+1', async () => {
+    const { service, prisma, compteMatieresService } = makeService(12);
+
+    await expect(service.cloturer(21)).resolves.toMatchObject({
+      statut: 'CLOTURE',
+    });
+    expect(prisma.exercice.update).toHaveBeenCalledWith({
+      where: { id: 21 },
+      data: { statut: 'CLOTURE' },
+      include: { soa: true },
+    });
     expect(compteMatieresService.reporterSoldes).toHaveBeenCalledWith(21);
+  });
+
+  it('refuse de clôturer un exercice déjà clôturé', async () => {
+    const { service, prisma, compteMatieresService } = makeService(12);
+    vi.mocked(prisma.exercice.findUnique).mockResolvedValue({
+      ...exercise,
+      statut: 'CLOTURE',
+    } as never);
+
+    await expect(service.cloturer(21)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(prisma.exercice.update).not.toHaveBeenCalled();
+    expect(compteMatieresService.reporterSoldes).not.toHaveBeenCalled();
+  });
+
+  it('refuse de clôturer un exercice introuvable', async () => {
+    const { service, prisma } = makeService(12);
+    vi.mocked(prisma.exercice.findUnique).mockResolvedValue(null);
+
+    await expect(service.cloturer(21)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

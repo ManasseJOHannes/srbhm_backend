@@ -38,6 +38,13 @@ export class ExercicesController {
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.COMPTABLE, Role.ADMIN)
+  @Patch(':id/cloturer')
+  cloturer(@Param('id') id: string) {
+    return this.exercicesService.cloturer(+id);
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.DEPOSITEUR_COMPTABLE)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateExerciceDto: UpdateExerciceDto, @Req() req: any) {

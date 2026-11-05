@@ -15,9 +15,10 @@ import { InventaireModule } from './inventaire/inventaire.module.js';
 import { StockReportModule } from './stock-report/stock-report.module.js';
 import { CodeComptesModule } from './code-comptes/code-comptes.module.js';
 import { ParametresModule } from './parametres/parametres.module.js';
+import { JournalAuditModule } from './journal-audit/journal-audit.module.js';
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, UserRequestsModule, SoaModule, ExercicesModule, NomenclaturesModule, ArticlesModule, CompteMatieresModule, MouvementsModule, InventaireModule, StockReportModule, CodeComptesModule, ParametresModule],
+  imports: [PrismaModule, UsersModule, AuthModule, UserRequestsModule, SoaModule, ExercicesModule, NomenclaturesModule, ArticlesModule, CompteMatieresModule, MouvementsModule, InventaireModule, StockReportModule, CodeComptesModule, ParametresModule, JournalAuditModule],
   controllers: [AppController],
   providers: [AppService],
 })

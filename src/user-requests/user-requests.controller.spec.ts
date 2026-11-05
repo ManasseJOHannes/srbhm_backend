@@ -11,7 +11,11 @@ describe('UserRequestsController', () => {
       prisma as never,
       mailService as never,
     );
-    const controller = new UserRequestsController(service);
+    const journalAuditService = { enregistrer: vi.fn() };
+    const controller = new UserRequestsController(
+      service,
+      journalAuditService as never,
+    );
     expect(controller).toBeDefined();
   });
 });

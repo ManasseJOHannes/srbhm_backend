@@ -6,15 +6,28 @@ import { AuthGuard } from '@nestjs/passport';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { JournalAuditService } from '../journal-audit/journal-audit.service.js';
+import { ACTIONS_AUDIT } from '../journal-audit/journal-audit.constants.js';
 @Controller('soa')
 export class SoaController {
-  constructor(private readonly soaService: SoaService) {}
+  constructor(
+    private readonly soaService: SoaService,
+    private readonly journalAuditService: JournalAuditService,
+  ) {}
 
   @Roles(Role.ADMIN)
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Post()
-  create(@Body() createSoaDto: CreateSoaDto) {
-    return this.soaService.create(createSoaDto);
+  async create(@Body() createSoaDto: CreateSoaDto, @Req() req: any) {
+    const soa = await this.soaService.create(createSoaDto);
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.SOA_CREE,
+      entite: 'SOA',
+      entiteId: soa.id,
+      auteurId: req.user.id,
+      details: `${soa.code} — ${soa.libelle}`,
+    });
+    return soa;
   }
 
   // Minimal public list required by the unauthenticated registration form.
@@ -40,14 +53,34 @@ export class SoaController {
   @Roles(Role.ADMIN)
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSoaDto: UpdateSoaDto) {
-    return this.soaService.update(+id, updateSoaDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateSoaDto: UpdateSoaDto,
+    @Req() req: any,
+  ) {
+    const soa = await this.soaService.update(+id, updateSoaDto);
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.SOA_MODIFIE,
+      entite: 'SOA',
+      entiteId: soa.id,
+      auteurId: req.user.id,
+      details: `${soa.code} — ${soa.libelle}`,
+    });
+    return soa;
   }
 
   @Roles(Role.ADMIN)
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.soaService.remove(+id);
+  async remove(@Param('id') id: string, @Req() req: any) {
+    const soa = await this.soaService.remove(+id);
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.SOA_SUPPRIME,
+      entite: 'SOA',
+      entiteId: soa.id,
+      auteurId: req.user.id,
+      details: `${soa.code} — ${soa.libelle}`,
+    });
+    return soa;
   }
 }

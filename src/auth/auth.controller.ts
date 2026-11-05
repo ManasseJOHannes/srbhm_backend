@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, Get, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Get, Patch, Query, Req, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { AuthGuard } from '@nestjs/passport';
 import { LoginDto } from './dto/login.dto.js';
@@ -8,13 +8,36 @@ import { UpdateMeDto } from './dto/update-me.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
+import { JournalAuditService } from '../journal-audit/journal-audit.service.js';
+import { ACTIONS_AUDIT } from '../journal-audit/journal-audit.constants.js';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) {}
+    constructor(
+        private readonly authService: AuthService,
+        private readonly journalAuditService: JournalAuditService,
+    ) {}
     @Post('login')
-    async login(@Body() LoginDto: LoginDto) {
-        return this.authService.login(LoginDto);
+    async login(@Body() LoginDto: LoginDto, @Req() req: any) {
+        try {
+            const result = await this.authService.login(LoginDto);
+            await this.journalAuditService.enregistrer({
+                action: ACTIONS_AUDIT.CONNEXION,
+                auteurId: result.user.id,
+                details: `Connexion réussie (${LoginDto.identifier})`,
+                ip: req.ip,
+            });
+            return result;
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                await this.journalAuditService.enregistrer({
+                    action: ACTIONS_AUDIT.CONNEXION_ECHOUEE,
+                    details: `Tentative avec l'identifiant « ${LoginDto.identifier} »`,
+                    ip: req.ip,
+                });
+            }
+            throw error;
+        }
     }
 
     /**

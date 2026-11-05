@@ -3,6 +3,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { JournalAuditService } from '../journal-audit/journal-audit.service.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -23,7 +24,13 @@ describe('AuthController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: authService }],
+      providers: [
+        { provide: AuthService, useValue: authService },
+        {
+          provide: JournalAuditService,
+          useValue: { enregistrer: vi.fn() },
+        },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);

@@ -6,21 +6,37 @@ import { AuthGuard } from '@nestjs/passport';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { JournalAuditService } from '../journal-audit/journal-audit.service.js';
+import { ACTIONS_AUDIT } from '../journal-audit/journal-audit.constants.js';
 
 @Controller('exercices')
 export class ExercicesController {
-  constructor(private readonly exercicesService: ExercicesService) {}
+  constructor(
+    private readonly exercicesService: ExercicesService,
+    private readonly journalAuditService: JournalAuditService,
+  ) {}
+
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.DEPOSITEUR_COMPTABLE)
   @Post()
-  create(
+  async create(
     @Body() createExerciceDto: CreateExerciceDto,
     @Req() req: any,
   ) {
-    return this.exercicesService.create(
+    const exercice = await this.exercicesService.create(
       createExerciceDto,
       req.user.id,
     );
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.EXERCICE_CREE,
+      entite: 'Exercice',
+      entiteId: exercice?.id,
+      auteurId: req.user.id,
+      details: `Exercice ${createExerciceDto.annee}${
+        exercice?.soa ? ` (${exercice.soa.code})` : ''
+      }`,
+    });
+    return exercice;
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -40,8 +56,18 @@ export class ExercicesController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.COMPTABLE, Role.ADMIN)
   @Patch(':id/cloturer')
-  cloturer(@Param('id') id: string) {
-    return this.exercicesService.cloturer(+id);
+  async cloturer(@Param('id') id: string, @Req() req: any) {
+    const exercice = await this.exercicesService.cloturer(+id);
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.EXERCICE_CLOTURE,
+      entite: 'Exercice',
+      entiteId: exercice.id,
+      auteurId: req.user.id,
+      details: `Exercice ${exercice.annee}${
+        exercice.soa ? ` (${exercice.soa.code})` : ''
+      } clôturé via la génération du Quitus`,
+    });
+    return exercice;
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -54,7 +80,15 @@ export class ExercicesController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.DEPOSITEUR_COMPTABLE)
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: any) {
-    return this.exercicesService.remove(+id, req.user.id);
+  async remove(@Param('id') id: string, @Req() req: any) {
+    const exercice = await this.exercicesService.remove(+id, req.user.id);
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.EXERCICE_SUPPRIME,
+      entite: 'Exercice',
+      entiteId: exercice.id,
+      auteurId: req.user.id,
+      details: `Exercice ${exercice.annee} (SOA #${exercice.soaId})`,
+    });
+    return exercice;
   }
 }

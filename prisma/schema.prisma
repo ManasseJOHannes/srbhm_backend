@@ -30,6 +30,7 @@ model User {
   /// un écart invalide tous les jetons émis auparavant (déconnexion forcée).
   tokenVersion Int                  @default(0)
   resetTokens  PasswordResetToken[]
+  journalAudits JournalAudit[]
 }
 
 /// Jeton de réinitialisation de mot de passe, à usage unique et expirant.
@@ -265,6 +266,26 @@ model Parametre {
   cle       String   @unique
   valeur    String
   updatedAt DateTime @updatedAt
+}
+
+/// Journal d'audit : trace des actions sensibles effectuées dans l'application.
+/// Aucune donnée secrète (mot de passe, charge utile complète) n'y est stockée.
+model JournalAudit {
+  id        Int      @id @default(autoincrement())
+  action    String
+  entite    String?
+  entiteId  Int?
+  auteurId  Int?
+  auteurNom String?
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  auteur User? @relation(fields: [auteurId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([auteurId])
 }
 
 enum Role {

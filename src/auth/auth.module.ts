@@ -5,11 +5,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy/jwt.strategy.js';
 import { MailModule } from '../mail/mail.module.js';
+import { JournalAuditModule } from '../journal-audit/journal-audit.module.js';
 
 @Module({
   imports: [
     PassportModule,
     MailModule,
+    JournalAuditModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '8h' },

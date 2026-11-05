@@ -18,11 +18,16 @@ import { SaveInventaireDto } from './dto/save-inventaire.dto.js';
 import { UpdateObservationEtatDto } from './dto/update-observation-etat.dto.js';
 import { UpsertLigneInventaireDto } from './dto/upsert-ligne-inventaire.dto.js';
 import { InventaireService } from './inventaire.service.js';
+import { JournalAuditService } from '../journal-audit/journal-audit.service.js';
+import { ACTIONS_AUDIT } from '../journal-audit/journal-audit.constants.js';
 
 @Controller('inventaires')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class InventaireController {
-  constructor(private readonly inventaireService: InventaireService) {}
+  constructor(
+    private readonly inventaireService: InventaireService,
+    private readonly journalAuditService: JournalAuditService,
+  ) {}
 
   @Roles(Role.ADMIN, Role.COMPTABLE, Role.DEPOSITEUR_COMPTABLE)
   @Get('exercices/:exerciceId')
@@ -49,39 +54,69 @@ export class InventaireController {
 
   @Roles(Role.DEPOSITEUR_COMPTABLE)
   @Patch('exercices/:exerciceId/lignes')
-  upsertLigne(
+  async upsertLigne(
     @Param('exerciceId', ParseIntPipe) exerciceId: number,
     @Req() req: any,
     @Body() dto: UpsertLigneInventaireDto,
   ) {
-    return this.inventaireService.upsertLigne(
+    const inventaire = await this.inventaireService.upsertLigne(
       exerciceId,
       req.user.id,
       dto,
     );
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.INVENTAIRE_LIGNE_ENREGISTREE,
+      entite: 'Inventaire',
+      entiteId: inventaire.inventaireId ?? undefined,
+      auteurId: req.user.id,
+      details: `Exercice #${exerciceId} — article #${dto.articleId} — constaté ${
+        dto.quantiteConstatee ?? 0
+      } — prix ${dto.prixUnitaire} Ar`,
+    });
+    return inventaire;
   }
 
   @Roles(Role.DEPOSITEUR_COMPTABLE)
   @Delete('exercices/:exerciceId/lignes/:ligneId')
-  supprimerLigne(
+  async supprimerLigne(
     @Param('exerciceId', ParseIntPipe) exerciceId: number,
     @Param('ligneId', ParseIntPipe) ligneId: number,
     @Req() req: any,
   ) {
-    return this.inventaireService.supprimerLigne(
+    const inventaire = await this.inventaireService.supprimerLigne(
       exerciceId,
       req.user.id,
       ligneId,
     );
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.INVENTAIRE_LIGNE_SUPPRIMEE,
+      entite: 'Inventaire',
+      entiteId: inventaire.inventaireId ?? undefined,
+      auteurId: req.user.id,
+      details: `Exercice #${exerciceId} — ligne #${ligneId}`,
+    });
+    return inventaire;
   }
 
   @Roles(Role.DEPOSITEUR_COMPTABLE)
   @Put('exercices/:exerciceId')
-  enregistrer(
+  async enregistrer(
     @Param('exerciceId', ParseIntPipe) exerciceId: number,
     @Req() req: any,
     @Body() dto: SaveInventaireDto,
   ) {
-    return this.inventaireService.enregistrer(exerciceId, req.user.id, dto);
+    const inventaire = await this.inventaireService.enregistrer(
+      exerciceId,
+      req.user.id,
+      dto,
+    );
+    await this.journalAuditService.enregistrer({
+      action: ACTIONS_AUDIT.INVENTAIRE_ENREGISTRE,
+      entite: 'Inventaire',
+      entiteId: inventaire.inventaireId ?? undefined,
+      auteurId: req.user.id,
+      details: `Exercice #${exerciceId} — ${dto.lignes.length} ligne(s) — date ${dto.dateInventaire}`,
+    });
+    return inventaire;
   }
 }

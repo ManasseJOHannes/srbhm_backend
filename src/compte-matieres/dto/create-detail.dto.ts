@@ -1,4 +1,11 @@
-import { IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateDetailDto {
   @IsInt()
@@ -15,7 +22,7 @@ export class CreateDetailDto {
   folioGrandLivre?: number;
 
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @IsPositive()
   existantDebut: number;
 
   @IsOptional()

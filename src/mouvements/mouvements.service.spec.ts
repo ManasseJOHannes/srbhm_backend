@@ -34,10 +34,15 @@ function makeService(overrides: Record<string, unknown> = {}) {
         .fn()
         .mockResolvedValue({ id: 7, existantDebut: 0, entrees: 0, sorties: 0 }),
       update: vi.fn().mockImplementation(({ data }: any) => Promise.resolve(data)),
+      delete: vi.fn().mockResolvedValue({ id: 7 }),
     },
     mouvement: {
       create: vi.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 11, ...data })),
       delete: vi.fn().mockResolvedValue({ id: 11 }),
+      count: vi.fn().mockResolvedValue(0),
+    },
+    ligneInventaire: {
+      count: vi.fn().mockResolvedValue(0),
     },
   };
   const prisma = {
@@ -267,8 +272,82 @@ describe('MouvementsService suppression', () => {
       where: { id: 7 },
       data: { entrees: 6 },
     });
+    expect(tx.detailCompteMatiere.delete).not.toHaveBeenCalled();
     expect(tx.mouvement.delete).toHaveBeenCalledWith({ where: { id: 11 } });
     expect(tx.compteMatiere.update).toHaveBeenCalled();
+  });
+
+  it('supprime le détail devenu totalement vide avec la dernière entrée', async () => {
+    const { service, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue(mouvementManuel),
+      },
+    });
+    tx.compteMatiere.findUnique.mockResolvedValue({ id: 9 });
+    tx.detailCompteMatiere.findUnique.mockResolvedValue({
+      id: 7,
+      existantDebut: 0,
+      entrees: 4,
+      sorties: 0,
+    });
+
+    await service.remove(11, 4);
+    expect(tx.detailCompteMatiere.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { entrees: 0 },
+    });
+    expect(tx.mouvement.count).toHaveBeenCalledWith({
+      where: { exerciceId: 5, articleId: 3, prixUnitaire: 100 },
+    });
+    expect(tx.detailCompteMatiere.delete).toHaveBeenCalledWith({
+      where: { id: 7 },
+    });
+  });
+
+  it('conserve le détail vide si un autre mouvement existe encore', async () => {
+    const { service, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue(mouvementManuel),
+      },
+    });
+    tx.compteMatiere.findUnique.mockResolvedValue({ id: 9 });
+    tx.detailCompteMatiere.findUnique.mockResolvedValue({
+      id: 7,
+      existantDebut: 0,
+      entrees: 4,
+      sorties: 0,
+    });
+    tx.mouvement.count.mockResolvedValue(1);
+
+    await service.remove(11, 4);
+    expect(tx.detailCompteMatiere.delete).not.toHaveBeenCalled();
+    expect(tx.ligneInventaire.count).not.toHaveBeenCalled();
+  });
+
+  it('conserve le détail vide référencé par un recensement', async () => {
+    const { service, tx } = makeService({
+      mouvement: {
+        findUnique: vi.fn().mockResolvedValue(mouvementManuel),
+      },
+    });
+    tx.compteMatiere.findUnique.mockResolvedValue({ id: 9 });
+    tx.detailCompteMatiere.findUnique.mockResolvedValue({
+      id: 7,
+      existantDebut: 0,
+      entrees: 4,
+      sorties: 0,
+    });
+    tx.ligneInventaire.count.mockResolvedValue(1);
+
+    await service.remove(11, 4);
+    expect(tx.ligneInventaire.count).toHaveBeenCalledWith({
+      where: {
+        articleId: 3,
+        prixUnitaire: 100,
+        inventaire: { exerciceId: 5 },
+      },
+    });
+    expect(tx.detailCompteMatiere.delete).not.toHaveBeenCalled();
   });
 
   it('supprime une sortie et decremente les sorties du detail', async () => {

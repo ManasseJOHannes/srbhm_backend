@@ -260,6 +260,13 @@ model LigneInventaire {
   @@index([articleId])
 }
 
+model Parametre {
+  id        Int      @id @default(autoincrement())
+  cle       String   @unique
+  valeur    String
+  updatedAt DateTime @updatedAt
+}
+
 enum Role {
   ADMIN
   ORDONNATEUR

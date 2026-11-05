@@ -244,6 +244,7 @@ export class MouvementsService {
       }
 
       const quantite = Number(mouvement.quantite);
+      let detailVide = false;
 
       if (mouvement.type === TypeMouvement.ENTREE) {
         const nouvellesEntrees = Number(detail.entrees) - quantite;
@@ -260,6 +261,10 @@ export class MouvementsService {
             'Suppression impossible : les sorties dépasseraient le stock disponible',
           );
         }
+        detailVide =
+          Number(detail.existantDebut) === 0 &&
+          nouvellesEntrees === 0 &&
+          Number(detail.sorties) === 0;
         await tx.detailCompteMatiere.update({
           where: { id: detail.id },
           data: { entrees: nouvellesEntrees },
@@ -271,6 +276,10 @@ export class MouvementsService {
             'Les sorties du détail deviendraient négatives',
           );
         }
+        detailVide =
+          Number(detail.existantDebut) === 0 &&
+          Number(detail.entrees) === 0 &&
+          nouvellesSorties === 0;
         await tx.detailCompteMatiere.update({
           where: { id: detail.id },
           data: { sorties: nouvellesSorties },
@@ -278,6 +287,33 @@ export class MouvementsService {
       }
 
       const supprime = await tx.mouvement.delete({ where: { id } });
+
+      // Nettoyage à la source : une ligne de détail devenue totalement vide
+      // ne doit pas rester dans le compte matière (ligne fantôme à 0).
+      if (detailVide) {
+        const autresMouvements = await tx.mouvement.count({
+          where: {
+            exerciceId: mouvement.exerciceId,
+            articleId: mouvement.articleId,
+            prixUnitaire: mouvement.prixUnitaire,
+          },
+        });
+        if (autresMouvements === 0) {
+          const lignesInventaire = await tx.ligneInventaire.count({
+            where: {
+              articleId: mouvement.articleId,
+              prixUnitaire: mouvement.prixUnitaire,
+              inventaire: { exerciceId: mouvement.exerciceId },
+            },
+          });
+          if (lignesInventaire === 0) {
+            await tx.detailCompteMatiere.delete({
+              where: { id: detail.id },
+            });
+          }
+        }
+      }
+
       await recalculerValeursCompte(tx, compte.id);
       return supprime;
     });
